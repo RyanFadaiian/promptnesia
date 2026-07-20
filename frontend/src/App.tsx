@@ -1,30 +1,15 @@
+import { Route, Routes } from "react-router";
 import "./App.css";
-import { useState } from "react";
+import HomePage from "./pages/HomePage";
+import LobbyPage from "./pages/LobbyPage";
 
-const App: React.FC = () => {
-  const [username, setUsername] = useState("");
-
-  return <div className="App">
-
-    <span className="heading">Prompnesia</span>
-
-    <label className="username-field">
-      <input
-        type="text"
-        name="username"
-        value={username}
-        onChange={(event) => setUsername(event.target.value)}
-        placeholder="Enter your username"
-        autoComplete="username"
-      />
-    </label>
-
-    <button className="play-button" type="button">
-      Play!
-    </button>
-
-  </div>
-
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/lobby/:lobbyId" element={<LobbyPage />} />
+    </Routes>
+  );
 }
 
 export default App;
