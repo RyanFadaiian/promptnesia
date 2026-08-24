@@ -5,7 +5,7 @@ function HomePage() {
   const [username, setUsername] = useState("");
   const navigate = useNavigate();
 
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedUsername = username.trim();
@@ -14,9 +14,33 @@ function HomePage() {
       return;
     }
 
-    navigate("/lobby/test", {
-      state: { username: trimmedUsername },
-    });
+    const url = 'http://127.0.0.1:8000/api/lobbies';
+  
+    // Define your lobby payload data here
+    const data = { 
+      username: trimmedUsername, 
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      navigate(`/lobby/${result.id}`, {
+        state: { username: trimmedUsername },
+      });
+    } catch (error) {
+      console.error('Error sending POST request:', error);
+    }
   }
 
   return (
