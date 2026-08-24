@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { Navigate, useLocation } from "react-router";
+import { useParams } from 'react-router';
+import { useEffect, useState } from "react";
 
 
 interface LobbyLocationState {
@@ -12,7 +13,31 @@ function LobbyPage() {
   const username = state?.username;
 
   const [copied, setCopied] = useState(false);
-  const inviteLink = window.location.href;
+  const { lobbyId } = useParams();
+  const inviteLink = `http://localhost:5173/join/${lobbyId}`;
+  const [players, setPlayers] = useState<string[]>([]);
+
+
+  async function updatePlayers() {
+    const response = await fetch(
+      `http://127.0.0.1:8000/api/lobbies/${lobbyId}`
+    );
+
+    if (!response.ok) return;
+
+    const result = await response.json();
+    setPlayers(result.players);
+  }
+
+  useEffect(() => {
+    updatePlayers().catch(console.error);
+
+    const interval = setInterval(() => {
+      updatePlayers().catch(console.error);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [lobbyId]);
 
   async function handleCopyInviteLink() {
     try {
@@ -37,7 +62,7 @@ function LobbyPage() {
 
       <section className="lobby">
         <p>
-          Lobby code: <strong>TEST</strong>
+          Lobby code: <strong>{lobbyId}</strong>
         </p>
 
         <div className="invite-link">
@@ -57,6 +82,9 @@ function LobbyPage() {
 
         <ul>
           <li>{username} (Host)</li>
+          {players.map((username) => (
+            <li key={username}>{username}</li>
+          ))}
         </ul>
 
         <button className="play-button" type="button">

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import random
@@ -16,6 +16,9 @@ lobbies = {}
 
 
 class CreateLobbyRequest(BaseModel):
+    username: str
+
+class AddPlayerRequest(BaseModel):
     username: str
 
 
@@ -39,3 +42,22 @@ def create_lobby(request: CreateLobbyRequest):
     }
 
     return lobbies[lobby_id]
+
+
+@app.post("/api/lobbies/{lobby_id}/players")
+def join_lobby(lobby_id: int, request: AddPlayerRequest):
+    if lobby_id not in lobbies:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
+    elif request.username in lobbies[lobby_id]["players"]:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user has already chosen this username")
+    lobbies[lobby_id]["players"].append(request.username)
+
+    return {"status": "joined"}
+
+
+@app.get("/api/lobbies/{lobby_id}")
+def retrieve_lobby(lobby_id: int):
+    if lobby_id not in lobbies:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
+    
+    return {"players": lobbies[lobby_id]["players"]}
