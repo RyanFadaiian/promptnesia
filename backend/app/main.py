@@ -63,3 +63,8 @@ def retrieve_lobby(lobby_id: int):
     print("LOBBY DATA:", lobbies[lobby_id])
     
     return {"players": lobbies[lobby_id]["players"], "host": lobbies[lobby_id]["host"]}
+
+
+@app.get("/api/lobbies/{lobby_id}/start")
+def start_game(lobby_id: int):
+    pass

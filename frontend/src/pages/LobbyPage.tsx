@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router";
-import { useParams } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { useEffect, useState } from "react";
 
 
@@ -17,6 +17,7 @@ function LobbyPage() {
   const inviteLink = `http://localhost:5173/join/${lobbyId}`;
   const [players, setPlayers] = useState<string[]>([]);
   const [host, setHost] = useState<string>();
+  const navigate = useNavigate();
 
 
   async function updatePlayers() {
@@ -52,6 +53,10 @@ function LobbyPage() {
     } catch {
       setCopied(false);
     }
+  }
+
+  async function startGame() {
+    navigate(`/lobby/${lobbyId}/start`)
   }
 
   if (!username) {
@@ -96,7 +101,7 @@ function LobbyPage() {
         </ul>
 
         {username === host ? (
-          <button className="play-button" type="button">Start</button>
+          <button className="play-button" type="button" onClick={startGame}>Start</button>
         ) : null}
       </section>
     </main>
