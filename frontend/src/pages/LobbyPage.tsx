@@ -16,6 +16,7 @@ function LobbyPage() {
   const { lobbyId } = useParams();
   const inviteLink = `http://localhost:5173/join/${lobbyId}`;
   const [players, setPlayers] = useState<string[]>([]);
+  const [host, setHost] = useState<string>();
 
 
   async function updatePlayers() {
@@ -26,7 +27,10 @@ function LobbyPage() {
     if (!response.ok) return;
 
     const result = await response.json();
+    console.log("API result:", result);
+    console.log("API host:", result.host);
     setPlayers(result.players);
+    setHost(result.host);
   }
 
   useEffect(() => {
@@ -81,10 +85,16 @@ function LobbyPage() {
         <h2>Players</h2>
 
         <ul>
-          <li>{username} (Host)</li>
-          {players.map((username) => (
-            <li key={username}>{username}</li>
-          ))}
+          {players.map((username) => {
+
+            return username === host ? (
+              <li key={username}>
+                {username} (Host)
+              </li>
+            ) : (
+              <li key={username}>{username}</li>
+            );
+          })}
         </ul>
 
         <button className="play-button" type="button">

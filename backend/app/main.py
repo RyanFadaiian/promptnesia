@@ -59,5 +59,7 @@ def join_lobby(lobby_id: int, request: AddPlayerRequest):
 def retrieve_lobby(lobby_id: int):
     if lobby_id not in lobbies:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
+
+    print("LOBBY DATA:", lobbies[lobby_id])
     
-    return {"players": lobbies[lobby_id]["players"]}
+    return {"players": lobbies[lobby_id]["players"], "host": lobbies[lobby_id]["host"]}
