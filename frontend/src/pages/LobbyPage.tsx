@@ -27,8 +27,6 @@ function LobbyPage() {
     if (!response.ok) return;
 
     const result = await response.json();
-    console.log("API result:", result);
-    console.log("API host:", result.host);
     setPlayers(result.players);
     setHost(result.host);
   }
@@ -97,9 +95,9 @@ function LobbyPage() {
           })}
         </ul>
 
-        <button className="play-button" type="button">
-          Start
-        </button>
+        {username === host ? (
+          <button className="play-button" type="button">Start</button>
+        ) : null}
       </section>
     </main>
   );
