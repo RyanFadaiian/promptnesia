@@ -65,6 +65,17 @@ def retrieve_lobby(lobby_id: int):
     return {"players": lobbies[lobby_id]["players"], "host": lobbies[lobby_id]["host"]}
 
 
-@app.get("/api/lobbies/{lobby_id}/start")
+@app.post("/api/lobbies/{lobby_id}/start")
 def start_game(lobby_id: int):
-    pass
+    if lobby_id not in lobbies:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
+
+    lobbies[lobby_id]["phase"] = "PROMPTING"
+    return lobbies[lobby_id]["phase"]
+
+@app.get("/api/lobbies/{lobby_id}/state")
+def start_game(lobby_id: int):
+    if lobby_id not in lobbies:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
+
+    return lobbies[lobby_id]["phase"]

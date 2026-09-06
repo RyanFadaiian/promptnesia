@@ -18,6 +18,7 @@ function LobbyPage() {
   const [players, setPlayers] = useState<string[]>([]);
   const [host, setHost] = useState<string>();
   const navigate = useNavigate();
+  const [phase, setPhase] = useState("LOBBY");
 
 
   async function updatePlayers() {
@@ -34,9 +35,11 @@ function LobbyPage() {
 
   useEffect(() => {
     updatePlayers().catch(console.error);
+    updateState().catch(console.error);
 
     const interval = setInterval(() => {
       updatePlayers().catch(console.error);
+      updateState().catch(console.error);
     }, 2000);
 
     return () => clearInterval(interval);
@@ -56,56 +59,78 @@ function LobbyPage() {
   }
 
   async function startGame() {
-    navigate(`/lobby/${lobbyId}/start`)
+    const response = await fetch(
+      `http://127.0.0.1:8000/api/lobbies/${lobbyId}/start`, {method: "POST",}
+    );
+
+    if (!response.ok) return;
+
+    const result = await response.json();
+    setPhase(result);
   }
 
   if (!username) {
     return <Navigate to="/" replace />;
   }
 
-  return (
-    <main className="App">
-      <h1 className="heading">Lobby</h1>
+  async function updateState() {
+    const response = await fetch(
+      `http://127.0.0.1:8000/api/lobbies/${lobbyId}/state`
+    );
 
-      <section className="lobby">
-        <p>
-          Lobby code: <strong>{lobbyId}</strong>
-        </p>
+    if (!response.ok) return;
 
-        <div className="invite-link">
-          <input
-            type="text"
-            value={inviteLink}
-            aria-label="Lobby invite link"
-            readOnly
-          />
+    const result = await response.json();
+    setPhase(result);
+  }
 
-          <button type="button" onClick={handleCopyInviteLink}>
-            {copied ? "Copied!" : "Copy Link"}
-          </button>
-        </div>
 
-        <h2>Players</h2>
+  if (phase === "LOBBY") {
+    return (
+      <main className="App">
+        <h1 className="heading">Lobby</h1>
 
-        <ul>
-          {players.map((username) => {
+        <section className="lobby">
+          <p>
+            Lobby code: <strong>{lobbyId}</strong>
+          </p>
 
-            return username === host ? (
-              <li key={username}>
-                {username} (Host)
-              </li>
-            ) : (
-              <li key={username}>{username}</li>
-            );
-          })}
-        </ul>
+          <div className="invite-link">
+            <input
+              type="text"
+              value={inviteLink}
+              aria-label="Lobby invite link"
+              readOnly
+            />
 
-        {username === host ? (
-          <button className="play-button" type="button" onClick={startGame}>Start</button>
-        ) : null}
-      </section>
-    </main>
-  );
+            <button type="button" onClick={handleCopyInviteLink}>
+              {copied ? "Copied!" : "Copy Link"}
+            </button>
+          </div>
+
+          <h2>Players</h2>
+
+          <ul>
+            {players.map((username) => {
+
+              return username === host ? (
+                <li key={username}>
+                  {username} (Host)
+                </li>
+              ) : (
+                <li key={username}>{username}</li>
+              );
+            })}
+          </ul>
+
+          {username === host ? (
+            <button className="play-button" type="button" onClick={startGame}>Start</button>
+          ) : null}
+        </section>
+      </main>
+    );
+  } else if (phase === "PROMPTING") {
+  }
 }
 
 export default LobbyPage;
