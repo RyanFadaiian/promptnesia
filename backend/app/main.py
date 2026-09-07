@@ -17,12 +17,23 @@ app.add_middleware(
 lobbies = {}
 
 
+def new_player():
+    return {"prompt": None, "image_url": None, "score": 0}
+
+
+def submitted_players(lobby):
+    return [
+        username for username, player in lobby["players"].items()
+        if player["prompt"] is not None
+    ]
+
+
 def update_prompting(lobby):
     if lobby["phase"] == "PROMPTING" and (
         time.monotonic() >= lobby["prompt_deadline"]
-        or len(lobby["prompts"]) == len(lobby["players"])
+        or len(submitted_players(lobby)) == len(lobby["players"])
     ):
-        lobby["phase"] = "PROMPTING_DONE"
+        lobby["phase"] = "GENERATING"
 
 
 class CreateLobbyRequest(BaseModel):
@@ -51,9 +62,8 @@ def create_lobby(request: CreateLobbyRequest):
     lobbies[lobby_id] = {
         "id": lobby_id,
         "host": request.username,
-        "players": [request.username],
+        "players": {request.username: new_player()},
         "phase": "LOBBY",
-        "prompts": {}
     }
 
     return lobbies[lobby_id]
@@ -65,7 +75,7 @@ def join_lobby(lobby_id: int, request: AddPlayerRequest):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
     elif request.username in lobbies[lobby_id]["players"]:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user has already chosen this username")
-    lobbies[lobby_id]["players"].append(request.username)
+    lobbies[lobby_id]["players"][request.username] = new_player()
 
     return {"status": "joined"}
 
@@ -75,9 +85,7 @@ def retrieve_lobby(lobby_id: int):
     if lobby_id not in lobbies:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
 
-    print("LOBBY DATA:", lobbies[lobby_id])
-    
-    return {"players": lobbies[lobby_id]["players"], "host": lobbies[lobby_id]["host"]}
+    return {"players": list(lobbies[lobby_id]["players"]), "host": lobbies[lobby_id]["host"]}
 
 
 @app.post("/api/lobbies/{lobby_id}/start")
@@ -101,7 +109,7 @@ def send_state(lobby_id: int):
         "phase": lobby["phase"],
         "seconds_left": max(0, math.ceil(lobby["prompt_deadline"] - time.monotonic()))
         if lobby["phase"] == "PROMPTING" else 0,
-        "submitted_players": list(lobby["prompts"]),
+        "submitted_players": submitted_players(lobby),
     }
 
 @app.post("/api/lobbies/{lobby_id}/prompt")
@@ -114,7 +122,9 @@ def store_prompt(lobby_id: int, request: AddPromptRequest):
 
     if not request.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt cannot be empty")
-    lobbies[lobby_id]["prompts"].setdefault(request.username, request.prompt.strip())
+    player = lobbies[lobby_id]["players"][request.username]
+    if player["prompt"] is None:
+        player["prompt"] = request.prompt.strip()
     update_prompting(lobbies[lobby_id])
 
     return {"status": "received"}

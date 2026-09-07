@@ -185,7 +185,7 @@ function LobbyPage() {
         </form>
       </main>
     );
-  } else if (phase === "PROMPTING_DONE") {
+  } else if (phase === "GENERATING") {
     return (
       <main className="App">
         <h1 className="heading">Prompting finished</h1>
