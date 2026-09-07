@@ -34,6 +34,8 @@ def update_prompting(lobby):
         or len(submitted_players(lobby)) == len(lobby["players"])
     ):
         lobby["phase"] = "GENERATING"
+        for index, player in enumerate(lobby["players"].values()):
+            player["image_url"] = f"/{index % 3 + 1}.png"
 
 
 class CreateLobbyRequest(BaseModel):
