@@ -7,6 +7,11 @@ interface LobbyLocationState {
   username?: string;
 }
 
+interface CurrentImage {
+  username: string;
+  image_url: string;
+}
+
 function LobbyPage() {
   const location = useLocation();
   const state = location.state as LobbyLocationState | null;
@@ -21,6 +26,8 @@ function LobbyPage() {
   const [prompt, setPrompt] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(40);
   const [submittedPlayers, setSubmittedPlayers] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentImage, setCurrentImage] = useState<CurrentImage | null>(null);
   const submitted = submittedPlayers.includes(username ?? "");
 
 
@@ -86,6 +93,8 @@ function LobbyPage() {
     setPhase(result.phase);
     setSecondsLeft(result.seconds_left);
     setSubmittedPlayers(result.submitted_players);
+    setCurrentImageIndex(result.current_image_index);
+    setCurrentImage(result.current_image);
   }
 
   async function submitPrompt() {
@@ -188,7 +197,36 @@ function LobbyPage() {
   } else if (phase === "GENERATING") {
     return (
       <main className="App">
-        <h1 className="heading">Prompting finished</h1>
+        <h1 className="heading">Generating images</h1>
+      </main>
+    );
+  } else if (phase === "GUESSING" && currentImage) {
+    return (
+      <main className="App">
+        <h1 className="heading">Guess the prompt</h1>
+        <p style={{ color: "white", margin: "0 0 16px" }}>
+          Image {currentImageIndex + 1} of {players.length}
+        </p>
+
+        <section className="home-form">
+          <img
+            className="guessing-image"
+            src={currentImage.image_url}
+            alt="Image for the current guessing round"
+          />
+          {currentImage.username === username ? (
+            <p style={{ color: "white" }}>Your image — other players are guessing.</p>
+          ) : (
+            <label className="username-field">
+              <input
+                key={currentImageIndex}
+                aria-label="Your guess"
+                placeholder="What was the original prompt?"
+                autoComplete="off"
+              />
+            </label>
+          )}
+        </section>
       </main>
     );
   }

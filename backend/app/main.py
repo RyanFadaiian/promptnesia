@@ -36,6 +36,8 @@ def update_prompting(lobby):
         lobby["phase"] = "GENERATING"
         for index, player in enumerate(lobby["players"].values()):
             player["image_url"] = f"/{index % 3 + 1}.png"
+        lobby["current_image_index"] = 0
+        lobby["phase"] = "GUESSING"
 
 
 class CreateLobbyRequest(BaseModel):
@@ -66,6 +68,7 @@ def create_lobby(request: CreateLobbyRequest):
         "host": request.username,
         "players": {request.username: new_player()},
         "phase": "LOBBY",
+        "current_image_index": 0,
     }
 
     return lobbies[lobby_id]
@@ -107,11 +110,20 @@ def send_state(lobby_id: int):
 
     lobby = lobbies[lobby_id]
     update_prompting(lobby)
+    current_image = None
+    if lobby["phase"] == "GUESSING":
+        username = list(lobby["players"])[lobby["current_image_index"]]
+        current_image = {
+            "username": username,
+            "image_url": lobby["players"][username]["image_url"],
+        }
     return {
         "phase": lobby["phase"],
         "seconds_left": max(0, math.ceil(lobby["prompt_deadline"] - time.monotonic()))
         if lobby["phase"] == "PROMPTING" else 0,
         "submitted_players": submitted_players(lobby),
+        "current_image_index": lobby["current_image_index"],
+        "current_image": current_image,
     }
 
 @app.post("/api/lobbies/{lobby_id}/prompt")
