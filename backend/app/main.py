@@ -21,6 +21,10 @@ class CreateLobbyRequest(BaseModel):
 class AddPlayerRequest(BaseModel):
     username: str
 
+class AddPromptRequest(BaseModel):
+    username: str
+    prompt: str
+
 
 @app.get("/api/health")
 def health_check():
@@ -39,6 +43,7 @@ def create_lobby(request: CreateLobbyRequest):
         "host": request.username,
         "players": [request.username],
         "phase": "LOBBY",
+        "prompts": {}
     }
 
     return lobbies[lobby_id]
@@ -74,8 +79,17 @@ def start_game(lobby_id: int):
     return lobbies[lobby_id]["phase"]
 
 @app.get("/api/lobbies/{lobby_id}/state")
-def start_game(lobby_id: int):
+def send_state(lobby_id: int):
     if lobby_id not in lobbies:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
 
     return lobbies[lobby_id]["phase"]
+
+@app.post("/api/lobbies/{lobby_id}/prompt")
+def store_prompt(lobby_id: int, request: AddPromptRequest):
+    if lobby_id not in lobbies:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
+    elif lobbies[lobby_id]["phase"] != "PROMPTING" or request.username not in lobbies[lobby_id]["players"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not right phase or player not in list")
+
+    lobbies[lobby_id]["prompts"][request.username] = request.prompt

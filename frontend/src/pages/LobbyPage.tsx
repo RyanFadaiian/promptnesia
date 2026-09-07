@@ -130,6 +130,30 @@ function LobbyPage() {
       </main>
     );
   } else if (phase === "PROMPTING") {
+    return (
+      <main className="App">
+        <h1 className="heading">Write a prompt</h1>
+
+        <form
+          className="home-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            
+          }}
+        >
+          <label className="username-field">
+            <input
+              placeholder="Enter your prompt"
+              required
+            />
+          </label>
+
+          <button className="play-button" type="submit">
+            Submit
+          </button>
+        </form>
+      </main>
+    );
   }
 }
 
