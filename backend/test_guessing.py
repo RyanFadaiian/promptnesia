@@ -98,6 +98,45 @@ class GuessingTests(unittest.TestCase):
         self.assertEqual(state["winner"], "Alice")
         self.assertEqual(state["scores"], {"Host": 0, "Alice": 1, "Bob": 0})
 
+    def test_return_to_lobby_requires_host_and_game_over(self):
+        self.start()
+        request = game.ReturnToLobbyRequest(username="Host")
+        with self.assertRaises(HTTPException) as error:
+            game.return_to_lobby(self.code, request)
+        self.assertEqual(error.exception.status_code, 409)
+        self.lobby["phase"] = "GAME_OVER"
+        with self.assertRaises(HTTPException) as error:
+            game.return_to_lobby(self.code, game.ReturnToLobbyRequest(username="Alice"))
+        self.assertEqual(error.exception.status_code, 403)
+        self.assertEqual(self.lobby["phase"], "GAME_OVER")
+
+    def test_return_clears_game_and_allows_replay(self):
+        self.start()
+        self.guess("Alice")
+        self.guess("Bob")
+        self.pick()
+        self.lobby["phase"] = "GAME_OVER"
+        self.lobby["current_image_index"] = 2
+        game.return_to_lobby(self.code, game.ReturnToLobbyRequest(username="Host"))
+        self.assertEqual(game.retrieve_lobby(self.code), {
+            "players": ["Host", "Alice", "Bob"], "host": "Host",
+        })
+        self.assertEqual(self.lobby["id"], self.code)
+        self.assertEqual(game.send_state(self.code)["phase"], "LOBBY")
+        self.assertTrue(all(player == game.new_player() for player in self.lobby["players"].values()))
+        self.assertEqual(self.lobby["guesses"], {})
+        self.assertEqual(self.lobby["current_image_index"], 0)
+        self.assertIsNone(self.lobby["winner"])
+        self.assertIsNone(self.lobby["next_image_at"])
+        self.assertNotIn("prompt_deadline", self.lobby)
+        self.now.return_value = 200
+        game.start_game(self.code)
+        state = game.send_state(self.code)
+        self.assertEqual(state["phase"], "PROMPTING")
+        self.assertEqual(state["seconds_left"], 40)
+        game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="New prompt"))
+        self.assertEqual(self.lobby["players"]["Host"]["prompt"], "New prompt")
+
     def test_all_images_advance_after_selection_and_finish(self):
         self.start()
         names = list(self.lobby["players"])

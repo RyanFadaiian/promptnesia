@@ -112,6 +112,10 @@ function LobbyPage() {
     setGuesses(result.guesses);
     setWinner(result.winner);
     setScores(result.scores);
+    if (result.phase === "LOBBY") {
+      setPrompt("");
+      setRoundError("");
+    }
   }
 
   async function submitPrompt() {
@@ -152,6 +156,24 @@ function LobbyPage() {
       await updateState();
     } catch {
       setRoundError("Could not submit. Please try again.");
+    } finally {
+      setSubmittingRound(false);
+    }
+  }
+
+  async function returnToLobby() {
+    setSubmittingRound(true);
+    setRoundError("");
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/lobbies/${lobbyId}/return`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ username }),
+      });
+      if (!response.ok) throw new Error("Could not return to lobby");
+      await updateState();
+    } catch {
+      setRoundError("Could not return to lobby. Please try again.");
     } finally {
       setSubmittingRound(false);
     }
@@ -332,6 +354,12 @@ function LobbyPage() {
               <li key={player}><strong>{player}:</strong> {score}</li>
             ))}
           </ul>
+          {username === host ? (
+            <button className="play-button" type="button" disabled={submittingRound} onClick={returnToLobby}>
+              Return to Lobby
+            </button>
+          ) : null}
+          {roundError && <p role="alert">{roundError}</p>}
         </section>
       </main>
     );

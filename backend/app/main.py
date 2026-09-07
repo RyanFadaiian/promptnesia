@@ -71,6 +71,9 @@ class CreateLobbyRequest(BaseModel):
 class AddPlayerRequest(BaseModel):
     username: str
 
+class ReturnToLobbyRequest(BaseModel):
+    username: str
+
 class AddPromptRequest(BaseModel):
     username: str
     prompt: str
@@ -144,6 +147,28 @@ def start_game(lobby_id: int):
         lobbies[lobby_id]["phase"] = "PROMPTING"
         lobbies[lobby_id]["prompt_deadline"] = time.monotonic() + 40
     return lobbies[lobby_id]["phase"]
+
+@app.post("/api/lobbies/{lobby_id}/return")
+def return_to_lobby(lobby_id: int, request: ReturnToLobbyRequest):
+    if lobby_id not in lobbies:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+    lobby = lobbies[lobby_id]
+    with round_lock:
+        if request.username != lobby["host"]:
+            raise HTTPException(status_code=403, detail="Only the host can return to the lobby")
+        if lobby["phase"] != "GAME_OVER":
+            raise HTTPException(status_code=409, detail="The game is not over yet")
+        lobby.update(
+            phase="LOBBY",
+            players={name: new_player() for name in lobby["players"]},
+            current_image_index=0,
+            guesses={},
+            winner=None,
+            next_image_at=None,
+        )
+        lobby.pop("prompt_deadline", None)
+    return {"status": "returned"}
+
 
 @app.get("/api/lobbies/{lobby_id}/state")
 def send_state(lobby_id: int):
