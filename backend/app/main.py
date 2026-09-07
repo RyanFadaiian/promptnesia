@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import random
+import math
+import time
 
 app = FastAPI(title="Prompnesia API")
 
@@ -13,6 +15,14 @@ app.add_middleware(
 )
 
 lobbies = {}
+
+
+def update_prompting(lobby):
+    if lobby["phase"] == "PROMPTING" and (
+        time.monotonic() >= lobby["prompt_deadline"]
+        or len(lobby["prompts"]) == len(lobby["players"])
+    ):
+        lobby["phase"] = "PROMPTING_DONE"
 
 
 class CreateLobbyRequest(BaseModel):
@@ -75,7 +85,9 @@ def start_game(lobby_id: int):
     if lobby_id not in lobbies:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
 
-    lobbies[lobby_id]["phase"] = "PROMPTING"
+    if lobbies[lobby_id]["phase"] == "LOBBY":
+        lobbies[lobby_id]["phase"] = "PROMPTING"
+        lobbies[lobby_id]["prompt_deadline"] = time.monotonic() + 40
     return lobbies[lobby_id]["phase"]
 
 @app.get("/api/lobbies/{lobby_id}/state")
@@ -83,13 +95,26 @@ def send_state(lobby_id: int):
     if lobby_id not in lobbies:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
 
-    return lobbies[lobby_id]["phase"]
+    lobby = lobbies[lobby_id]
+    update_prompting(lobby)
+    return {
+        "phase": lobby["phase"],
+        "seconds_left": max(0, math.ceil(lobby["prompt_deadline"] - time.monotonic()))
+        if lobby["phase"] == "PROMPTING" else 0,
+        "submitted_players": list(lobby["prompts"]),
+    }
 
 @app.post("/api/lobbies/{lobby_id}/prompt")
 def store_prompt(lobby_id: int, request: AddPromptRequest):
     if lobby_id not in lobbies:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
-    elif lobbies[lobby_id]["phase"] != "PROMPTING" or request.username not in lobbies[lobby_id]["players"]:
+    update_prompting(lobbies[lobby_id])
+    if lobbies[lobby_id]["phase"] != "PROMPTING" or request.username not in lobbies[lobby_id]["players"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not right phase or player not in list")
 
-    lobbies[lobby_id]["prompts"][request.username] = request.prompt
+    if not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+    lobbies[lobby_id]["prompts"].setdefault(request.username, request.prompt.strip())
+    update_prompting(lobbies[lobby_id])
+
+    return {"status": "received"}

@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router";
-import { useParams, useNavigate } from 'react-router';
+import { useParams } from 'react-router';
 import { useEffect, useState } from "react";
 
 
@@ -17,8 +17,11 @@ function LobbyPage() {
   const inviteLink = `http://localhost:5173/join/${lobbyId}`;
   const [players, setPlayers] = useState<string[]>([]);
   const [host, setHost] = useState<string>();
-  const navigate = useNavigate();
   const [phase, setPhase] = useState("LOBBY");
+  const [prompt, setPrompt] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(40);
+  const [submittedPlayers, setSubmittedPlayers] = useState<string[]>([]);
+  const submitted = submittedPlayers.includes(username ?? "");
 
 
   async function updatePlayers() {
@@ -40,7 +43,7 @@ function LobbyPage() {
     const interval = setInterval(() => {
       updatePlayers().catch(console.error);
       updateState().catch(console.error);
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [lobbyId]);
@@ -65,8 +68,7 @@ function LobbyPage() {
 
     if (!response.ok) return;
 
-    const result = await response.json();
-    setPhase(result);
+    await updateState();
   }
 
   if (!username) {
@@ -81,7 +83,29 @@ function LobbyPage() {
     if (!response.ok) return;
 
     const result = await response.json();
-    setPhase(result);
+    setPhase(result.phase);
+    setSecondsLeft(result.seconds_left);
+    setSubmittedPlayers(result.submitted_players);
+  }
+
+  async function submitPrompt() {
+    if (!prompt.trim() || submitted || secondsLeft === 0) return;
+
+    const response = await fetch(
+      `http://127.0.0.1:8000/api/lobbies/${lobbyId}/prompt`, {
+        method: "POST",
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          username: username,
+          prompt: prompt
+        })
+      }
+    );
+    if (!response.ok) {
+      await updateState();
+      return;
+    }
+    await updateState();
   }
 
 
@@ -133,25 +157,38 @@ function LobbyPage() {
     return (
       <main className="App">
         <h1 className="heading">Write a prompt</h1>
+        <p style={{ color: "white", margin: "0 0 16px" }}>
+          {secondsLeft}s remaining · {submittedPlayers.length} / {players.length} submitted
+        </p>
 
         <form
           className="home-form"
           onSubmit={(event) => {
             event.preventDefault();
-            
+            submitPrompt().catch(console.error);
           }}
         >
           <label className="username-field">
             <input
               placeholder="Enter your prompt"
+              aria-label="Your prompt"
               required
+              value={prompt}
+              disabled={submitted || secondsLeft === 0}
+              onChange={(event) => setPrompt(event.target.value)}
             />
           </label>
 
-          <button className="play-button" type="submit">
-            Submit
+          <button className="play-button" type="submit" disabled={submitted || secondsLeft === 0 || !prompt.trim()}>
+            {submitted ? "Submitted" : "Submit"}
           </button>
         </form>
+      </main>
+    );
+  } else if (phase === "PROMPTING_DONE") {
+    return (
+      <main className="App">
+        <h1 className="heading">Prompting finished</h1>
       </main>
     );
   }
