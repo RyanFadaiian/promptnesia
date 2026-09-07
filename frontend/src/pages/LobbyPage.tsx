@@ -10,6 +10,7 @@ interface LobbyLocationState {
 interface CurrentImage {
   username: string;
   image_url: string;
+  prompt?: string | null;
 }
 
 function LobbyPage() {
@@ -28,8 +29,19 @@ function LobbyPage() {
   const [submittedPlayers, setSubmittedPlayers] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [currentImage, setCurrentImage] = useState<CurrentImage | null>(null);
+  const [guessedPlayers, setGuessedPlayers] = useState<string[]>([]);
+  const [eligibleGuessers, setEligibleGuessers] = useState(0);
+  const [guesses, setGuesses] = useState<Record<string, string>>({});
+  const [winner, setWinner] = useState<string | null>(null);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [submittingRound, setSubmittingRound] = useState(false);
+  const [roundError, setRoundError] = useState("");
+  const guessed = guessedPlayers.includes(username ?? "");
   const submitted = submittedPlayers.includes(username ?? "");
 
+  useEffect(() => {
+    setRoundError("");
+  }, [currentImageIndex]);
 
   async function updatePlayers() {
     const response = await fetch(
@@ -95,6 +107,11 @@ function LobbyPage() {
     setSubmittedPlayers(result.submitted_players);
     setCurrentImageIndex(result.current_image_index);
     setCurrentImage(result.current_image);
+    setGuessedPlayers(result.guessed_players);
+    setEligibleGuessers(result.eligible_guessers);
+    setGuesses(result.guesses);
+    setWinner(result.winner);
+    setScores(result.scores);
   }
 
   async function submitPrompt() {
@@ -117,6 +134,28 @@ function LobbyPage() {
     await updateState();
   }
 
+
+  async function submitRound(action: "guess" | "winner", value: string) {
+    if (!value.trim() || submittingRound || (action === "guess" ? guessed : winner)) return;
+    setSubmittingRound(true);
+    setRoundError("");
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/lobbies/${lobbyId}/${action}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ username, current_image_index: currentImageIndex, [action]: value }),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        setRoundError(result.detail || "Could not submit. Please try again.");
+      }
+      await updateState();
+    } catch {
+      setRoundError("Could not submit. Please try again.");
+    } finally {
+      setSubmittingRound(false);
+    }
+  }
 
   if (phase === "LOBBY") {
     return (
@@ -200,10 +239,10 @@ function LobbyPage() {
         <h1 className="heading">Generating images</h1>
       </main>
     );
-  } else if (phase === "GUESSING" && currentImage) {
+  } else if ((phase === "GUESSING" || phase === "REVEAL") && currentImage) {
     return (
       <main className="App">
-        <h1 className="heading">Guess the prompt</h1>
+        <h1 className="heading">{phase === "REVEAL" ? "The original prompt" : "Guess the prompt"}</h1>
         <p style={{ color: "white", margin: "0 0 16px" }}>
           Image {currentImageIndex + 1} of {players.length}
         </p>
@@ -214,18 +253,85 @@ function LobbyPage() {
             src={currentImage.image_url}
             alt="Image for the current guessing round"
           />
-          {currentImage.username === username ? (
-            <p style={{ color: "white" }}>Your image — other players are guessing.</p>
+          {phase === "REVEAL" ? (
+            <section className="lobby" style={{ marginTop: 16 }}>
+              <p><strong>{currentImage.username}:</strong> {currentImage.prompt ?? "No prompt submitted"}</p>
+              <h2>Guesses</h2>
+              {winner ? (
+                <p role="status"><strong>{winner} wins 1 point!</strong> Moving on in a few seconds...</p>
+              ) : Object.keys(guesses).length > 0 ? (
+                <p>{currentImage.username === username ? "Pick your favorite guess." : `${currentImage.username} is picking a favorite.`}</p>
+              ) : null}
+              {Object.keys(guesses).length === 0 ? <p>No guesses.</p> : (
+                <ul>
+                  {Object.entries(guesses).map(([player, guess]) => (
+                    <li key={player}>
+                      <strong>{player}:</strong> {guess}
+                      {currentImage.username === username && !winner && (
+                        <button
+                          className="play-button"
+                          type="button"
+                          disabled={submittingRound}
+                          onClick={() => void submitRound("winner", player)}
+                        >
+                          Pick winner
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {roundError && <p role="alert">{roundError}</p>}
+            </section>
           ) : (
-            <label className="username-field">
-              <input
-                key={currentImageIndex}
-                aria-label="Your guess"
-                placeholder="What was the original prompt?"
-                autoComplete="off"
-              />
-            </label>
+            <>
+              <p style={{ color: "white" }} aria-live="polite">
+                {guessedPlayers.length} / {eligibleGuessers} guessed
+              </p>
+              {currentImage.username === username ? (
+                <p style={{ color: "white" }}>Your image — other players are guessing.</p>
+              ) : (
+                <form
+                  className="home-form"
+                  key={currentImageIndex}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const guess = new FormData(event.currentTarget).get("guess") as string;
+                    void submitRound("guess", guess);
+                  }}
+                >
+                  <label className="username-field">
+                    <input
+                      name="guess"
+                      required
+                      pattern=".*\S.*"
+                      disabled={guessed || submittingRound}
+                      aria-label="Your guess"
+                      placeholder="What was the original prompt?"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <button className="play-button" type="submit" disabled={guessed || submittingRound}>
+                    {guessed ? "Submitted" : submittingRound ? "Submitting..." : "Submit"}
+                  </button>
+                  {roundError && <p role="alert" style={{ color: "white" }}>{roundError}</p>}
+                </form>
+              )}
+            </>
           )}
+        </section>
+      </main>
+    );
+  } else if (phase === "GAME_OVER") {
+    return (
+      <main className="App">
+        <h1 className="heading">Final scores</h1>
+        <section className="lobby">
+          <ul>
+            {Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([player, score]) => (
+              <li key={player}><strong>{player}:</strong> {score}</li>
+            ))}
+          </ul>
         </section>
       </main>
     );
