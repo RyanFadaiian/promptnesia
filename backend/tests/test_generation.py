@@ -104,7 +104,7 @@ class GenerationTests(unittest.TestCase):
         self.rewrite.assert_called_once()
         self.assertEqual(player["image_url"], "/not_allowed.png")
         self.assertTrue(player["image_ready"])
-        self.assertTrue((Path(__file__).resolve().parents[1] / "frontend/public/not_allowed.png").is_file())
+        self.assertTrue((Path(__file__).resolve().parents[2] / "frontend/public/not_allowed.png").is_file())
 
     def test_unrelated_error_does_not_rewrite(self):
         player = self.lobby["players"]["Host"]

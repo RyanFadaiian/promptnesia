@@ -6,7 +6,7 @@ import type { CurrentImage } from "../components/lobby/GuessingScreen";
 import { api } from "../api";
 import { Navigate, useLocation } from "react-router";
 import { useParams } from 'react-router';
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 
 interface LobbyLocationState {
@@ -56,11 +56,29 @@ function LobbyPage() {
     setRoundError("");
   }, [currentImageIndex]);
 
-  async function updatePlayers() {
+  const updatePlayers = useCallback(async () => {
     const result = await api<{ players: string[]; host: string }>(`/lobbies/${lobbyId}`);
     setPlayers(result.players);
     setHost(result.host);
-  }
+  }, [lobbyId]);
+
+  const updateState = useCallback(async () => {
+    const result = await api<LobbyState>(`/lobbies/${lobbyId}/state`);
+    setPhase(result.phase);
+    setSecondsLeft(result.seconds_left);
+    setSubmittedPlayers(result.submitted_players);
+    setCurrentImageIndex(result.current_image_index);
+    setCurrentImage(result.current_image);
+    setGuessedPlayers(result.guessed_players);
+    setEligibleGuessers(result.eligible_guessers);
+    setGuesses(result.guesses);
+    setWinner(result.winner);
+    setScores(result.scores);
+    if (result.phase === "LOBBY") {
+      setPrompt("");
+      setRoundError("");
+    }
+  }, [lobbyId]);
 
   useEffect(() => {
     updatePlayers().catch(console.error);
@@ -72,7 +90,7 @@ function LobbyPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [lobbyId]);
+  }, [updatePlayers, updateState]);
 
   async function handleCopyInviteLink() {
     try {
@@ -98,24 +116,6 @@ function LobbyPage() {
 
   if (!username) {
     return <Navigate to="/" replace />;
-  }
-
-  async function updateState() {
-    const result = await api<LobbyState>(`/lobbies/${lobbyId}/state`);
-    setPhase(result.phase);
-    setSecondsLeft(result.seconds_left);
-    setSubmittedPlayers(result.submitted_players);
-    setCurrentImageIndex(result.current_image_index);
-    setCurrentImage(result.current_image);
-    setGuessedPlayers(result.guessed_players);
-    setEligibleGuessers(result.eligible_guessers);
-    setGuesses(result.guesses);
-    setWinner(result.winner);
-    setScores(result.scores);
-    if (result.phase === "LOBBY") {
-      setPrompt("");
-      setRoundError("");
-    }
   }
 
   async function submitPrompt() {
