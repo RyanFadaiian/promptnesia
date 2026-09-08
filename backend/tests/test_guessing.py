@@ -81,11 +81,15 @@ class GuessingTests(unittest.TestCase):
         self.assertEqual(self.lobby["guesses"][1], {"Host": "A tree"})
         self.assertEqual(game.send_state(self.code)["guessed_players"], ["Host"])
 
-    def test_single_player_reveals_without_waiting(self):
-        self.start(guests=())
-        self.assertEqual(game.send_state(self.code)["phase"], "REVEAL")
-        self.now.return_value = 105
-        self.assertEqual(game.send_state(self.code)["phase"], "GAME_OVER")
+    def test_start_requires_at_least_two_players(self):
+        with self.assertRaises(HTTPException) as error:
+            game.start_game(self.code)
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertEqual(error.exception.detail, "You need at least 2 players to start the game!")
+        self.assertEqual(self.lobby["phase"], "LOBBY")
+        self.assertNotIn("prompt_deadline", self.lobby)
+        game.join_lobby(self.code, game.AddPlayerRequest(username="Guest"))
+        self.assertEqual(game.start_game(self.code), "PROMPTING")
 
     def test_only_author_can_pick_a_submitted_guess_once(self):
         self.start()

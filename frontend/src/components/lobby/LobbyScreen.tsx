@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface LobbyScreenProps {
   lobbyId?: string;
   inviteLink: string;
@@ -12,6 +14,8 @@ interface LobbyScreenProps {
 export default function LobbyScreen({
   lobbyId, inviteLink, copied, players, host, username, handleCopyInviteLink, startGame
 }: LobbyScreenProps) {
+  const [showStartError, setShowStartError] = useState(false);
+
   return (
     <main className="App">
       <h1 className="heading">Lobby</h1>
@@ -49,8 +53,19 @@ export default function LobbyScreen({
           })}
         </ul>
 
+        {showStartError && players.length < 2 && (
+          <p role="alert"><strong>You need at least 2 players to start the game!</strong></p>
+        )}
+
         {username === host ? (
-          <button className="play-button" type="button" onClick={startGame}>Start</button>
+          <button className="play-button" type="button" onClick={() => {
+            if (players.length < 2) {
+              setShowStartError(true);
+              return;
+            }
+            setShowStartError(false);
+            startGame();
+          }}>Start</button>
         ) : null}
       </section>
     </main>

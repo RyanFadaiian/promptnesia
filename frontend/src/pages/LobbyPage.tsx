@@ -190,6 +190,9 @@ function LobbyPage() {
     return (
       <main className="App">
         <h1 className="heading">Generating images</h1>
+        <div>
+          <img src="/loading.gif" alt="Loading cat" />
+        </div>
       </main>
     );
   } else if ((phase === "GUESSING" || phase === "REVEAL") && currentImage) {

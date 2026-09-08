@@ -167,6 +167,8 @@ def start_game(lobby_id: int):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
 
     if lobbies[lobby_id]["phase"] == "LOBBY":
+        if len(lobbies[lobby_id]["players"]) < 2:
+            raise HTTPException(status_code=400, detail="You need at least 2 players to start the game!")
         for index, player in enumerate(lobbies[lobby_id]["players"].values()):
             player["image_url"] = f"/{index % 3 + 1}.png"
         lobbies[lobby_id]["phase"] = "PROMPTING"
