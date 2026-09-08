@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from app import main as game
+from app import images
 
 
 class GenerationTests(unittest.TestCase):
@@ -22,15 +23,15 @@ class GenerationTests(unittest.TestCase):
             b64_json=base64.b64encode(self.image).decode(),
         )])
         for name, replacement in [("generated_dir", self.directory), ("image_queue", None)]:
-            mock = patch.object(game, name, replacement) if replacement is not None else patch.object(game, name)
+            mock = patch.object(images, name, replacement) if replacement is not None else patch.object(images, name)
             value = mock.start()
             self.addCleanup(mock.stop)
             if name == "image_queue":
                 self.worker = value
-        api = patch.object(game.client.images, "generate", return_value=response)
+        api = patch.object(images.client.images, "generate", return_value=response)
         self.generate = api.start()
         self.addCleanup(api.stop)
-        rewrite = patch.object(game.client.responses, "create", return_value=SimpleNamespace(output_text="A playful cartoon cat"))
+        rewrite = patch.object(images.client.responses, "create", return_value=SimpleNamespace(output_text="A playful cartoon cat"))
         self.rewrite = rewrite.start()
         self.addCleanup(rewrite.stop)
         self.lobby = game.create_lobby(game.CreateLobbyRequest(username="Host"))
@@ -48,7 +49,7 @@ class GenerationTests(unittest.TestCase):
         self.generate.assert_not_called()
 
         for player in self.lobby["players"].values():
-            game.generate_image(player)
+            images.generate_image(player)
         state = game.send_state(self.code)
         self.assertEqual(state["phase"], "GUESSING")
         self.assertEqual(self.generate.call_count, 2)
@@ -72,20 +73,20 @@ class GenerationTests(unittest.TestCase):
         self.generate.side_effect = [RuntimeError("Test failure"), success]
         with self.assertLogs(level="WARNING"):
             for player in self.lobby["players"].values():
-                game.generate_image(player)
+                images.generate_image(player)
         self.assertEqual(self.lobby["players"]["Host"]["image_url"], "/1.png")
         self.assertIn("/generated/", self.lobby["players"]["Guest"]["image_url"])
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
 
     def rejection(self, code="moderation_blocked"):
         response = httpx2.Response(400, request=httpx2.Request("POST", "https://api.openai.com/v1/images/generations"))
-        return game.BadRequestError("Rejected", response=response, body={"code": code})
+        return images.BadRequestError("Rejected", response=response, body={"code": code})
 
     def test_rejected_prompt_is_rewritten_once(self):
         player = self.lobby["players"]["Host"]
         player["prompt"] = "Original joke"
         self.generate.side_effect = [self.rejection(), self.generate.return_value]
-        game.generate_image(player)
+        images.generate_image(player)
         self.rewrite.assert_called_once()
         self.assertEqual(self.rewrite.call_args.kwargs["input"], "Original joke")
         self.generate.assert_called_with(model="gpt-image-2", prompt="A playful cartoon cat")
@@ -98,7 +99,7 @@ class GenerationTests(unittest.TestCase):
         player["prompt"] = "Original joke"
         self.generate.side_effect = [self.rejection(), self.rejection()]
         with self.assertLogs(level="WARNING"):
-            game.generate_image(player)
+            images.generate_image(player)
         self.assertEqual(self.generate.call_count, 2)
         self.rewrite.assert_called_once()
         self.assertEqual(player["image_url"], "/not_allowed.png")
@@ -109,7 +110,7 @@ class GenerationTests(unittest.TestCase):
         player = self.lobby["players"]["Host"]
         self.generate.side_effect = self.rejection("invalid_value")
         with self.assertLogs(level="WARNING"):
-            game.generate_image(player)
+            images.generate_image(player)
         self.rewrite.assert_not_called()
         self.generate.assert_called_once()
         self.assertEqual(player["image_url"], "/1.png")
@@ -123,8 +124,8 @@ class GenerationTests(unittest.TestCase):
                 self.generate.side_effect = self.rejection()
                 self.rewrite.return_value = SimpleNamespace(output_text=" ")
                 self.rewrite.side_effect = RuntimeError("Test failure") if fails else None
-                with patch.object(game.logging, "warning"):
-                    game.generate_image(player)
+                with patch.object(images.logging, "warning"):
+                    images.generate_image(player)
                 self.generate.assert_called_once()
                 self.assertTrue(player["image_ready"])
                 self.assertEqual(player["image_url"], "/not_allowed.png")
@@ -133,7 +134,7 @@ class GenerationTests(unittest.TestCase):
         game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="A cat"))
         with patch.object(game.time, "monotonic", return_value=self.lobby["prompt_deadline"]):
             self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
-        game.generate_image(self.lobby["players"]["Host"])
+        images.generate_image(self.lobby["players"]["Host"])
         self.generate.assert_called_once_with(model="gpt-image-2", prompt="A cat")
         self.assertEqual(self.lobby["players"]["Guest"]["image_url"], "/2.png")
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
@@ -143,21 +144,21 @@ class GenerationTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(pool.map(lambda _: game.store_prompt(self.code, request), range(8)))
         player = self.lobby["players"]["Host"]
-        self.worker.submit.assert_called_once_with(game.generate_image, player)
+        self.worker.submit.assert_called_once_with(images.generate_image, player)
         self.assertEqual(game.send_state(self.code)["phase"], "PROMPTING")
-        game.generate_image(player)
+        images.generate_image(player)
         url = player["image_url"]
         self.assertTrue(player["image_ready"])
         self.assertEqual(game.send_state(self.code)["phase"], "PROMPTING")
         game.store_prompt(self.code, game.AddPromptRequest(username="Guest", prompt="A dog"))
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
         self.assertEqual(player["image_url"], url)
-        game.generate_image(self.lobby["players"]["Guest"])
+        images.generate_image(self.lobby["players"]["Guest"])
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
 
     def test_ready_images_skip_wait_at_deadline(self):
         game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="A cat"))
-        game.generate_image(self.lobby["players"]["Host"])
+        images.generate_image(self.lobby["players"]["Host"])
         with patch.object(game.time, "monotonic", return_value=self.lobby["prompt_deadline"]):
             self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
         self.assertTrue(self.lobby["players"]["Guest"]["image_ready"])
