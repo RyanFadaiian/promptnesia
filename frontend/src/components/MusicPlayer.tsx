@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 
-const songs = [
-  "/music/Sneaky_snitch.mp3",
-  "/music/Local_forecast_elevator.mp3",
-  "/music/Fluffing_a_duck.mp3",
-];
+const songs = Object.values(
+  import.meta.glob("/src/music/*.mp3", {
+    eager: true,
+    query: "?url",
+    import: "default",
+  })
+);
 
 export default function MusicPlayer() {
   const audio = useRef<HTMLAudioElement>(null);

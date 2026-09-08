@@ -26,8 +26,10 @@ function HomePage() {
   }
 
   return (
-    <main className="App">
+    <main className="App home-page">
       <h1 className="heading">Prompnesia</h1>
+      <p className="home-tagline">Write a prompt. Guess the picture. Pick the funniest answer.</p>
+      <img className="home-mascot" src="/loading.gif" alt="A confused cat with a loading spinner" />
 
       <form className="home-form" onSubmit={handleSubmit}>
         <label className="username-field">
@@ -42,7 +44,7 @@ function HomePage() {
         </label>
 
         <button className="play-button" type="submit">
-          Play!
+          Create Game
         </button>
       </form>
     </main>
