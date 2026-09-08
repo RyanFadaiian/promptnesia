@@ -1,12 +1,25 @@
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import random
 import math
 import time
-from threading import Lock
+from threading import Lock, Thread
+import base64
+import logging
+from uuid import uuid4
+from pathlib import Path
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+client = OpenAI(timeout=180, max_retries=0)
 
 app = FastAPI(title="Prompnesia API")
+generated_dir = Path(__file__).resolve().parents[1] / "generated"
+generated_dir.mkdir(exist_ok=True)
+app.mount("/generated", StaticFiles(directory=generated_dir), name="generated")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,16 +43,32 @@ def submitted_players(lobby):
     ]
 
 
-def update_prompting(lobby):
-    if lobby["phase"] == "PROMPTING" and (
-        time.monotonic() >= lobby["prompt_deadline"]
-        or len(submitted_players(lobby)) == len(lobby["players"])
-    ):
-        lobby["phase"] = "GENERATING"
-        for index, player in enumerate(lobby["players"].values()):
-            player["image_url"] = f"/{index % 3 + 1}.png"
+def generate_images(lobby):
+    for player in lobby["players"].values():
+        if not player["prompt"]:
+            continue
+        try:
+            result = client.images.generate(model="gpt-image-2", prompt=player["prompt"])
+            filename = f"{uuid4().hex}.png"
+            (generated_dir / filename).write_bytes(base64.b64decode(result.data[0].b64_json, validate=True))
+            player["image_url"] = f"http://127.0.0.1:8000/generated/{filename}"
+        except Exception as error:
+            logging.warning("Image generation failed (%s); using placeholder", type(error).__name__)
+    with round_lock:
         lobby["current_image_index"] = 0
         lobby["phase"] = "GUESSING"
+
+
+def update_prompting(lobby):
+    with round_lock:
+        if lobby["phase"] == "PROMPTING" and (
+            time.monotonic() >= lobby["prompt_deadline"]
+            or len(submitted_players(lobby)) == len(lobby["players"])
+        ):
+            lobby["phase"] = "GENERATING"
+            for index, player in enumerate(lobby["players"].values()):
+                player["image_url"] = f"/{index % 3 + 1}.png"
+            Thread(target=generate_images, args=(lobby,), daemon=True).start()
 
 
 def update_guessing(lobby):

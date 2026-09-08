@@ -11,6 +11,9 @@ class GuessingTests(unittest.TestCase):
         self.clock = patch.object(game.time, "monotonic", return_value=100)
         self.now = self.clock.start()
         self.addCleanup(self.clock.stop)
+        worker = patch.object(game, "Thread")
+        worker.start()
+        self.addCleanup(worker.stop)
         self.lobby = game.create_lobby(game.CreateLobbyRequest(username="Host"))
         self.code = self.lobby["id"]
 
@@ -20,6 +23,8 @@ class GuessingTests(unittest.TestCase):
         game.start_game(self.code)
         for name in self.lobby["players"]:
             game.store_prompt(self.code, game.AddPromptRequest(username=name, prompt="Secret prompt"))
+        # These tests cover gameplay after the image worker finishes.
+        self.lobby["phase"] = "GUESSING"
 
     def guess(self, username, guess="A cat", index=0):
         return game.store_guess(self.code, game.AddGuessRequest(
