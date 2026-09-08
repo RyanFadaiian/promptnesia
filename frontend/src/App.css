@@ -19,7 +19,7 @@ input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 16px;
+  padding: 24px 16px 80px;
   background: #2f74c0;
   font-family: "Neucha", cursive;
 }
@@ -104,4 +104,32 @@ input {
   max-height: 50vh;
   object-fit: contain;
   border-radius: 8px;
+}
+
+.music-player {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: white;
+  color: #174a80;
+  font-family: "Neucha", cursive;
+}
+
+.music-player input {
+  width: 90px;
+  accent-color: #2f74c0;
+}
+
+.music-player button {
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #e8f2fc;
+  color: #174a80;
+  cursor: pointer;
 }
