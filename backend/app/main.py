@@ -21,6 +21,14 @@ app.add_middleware(
 lobbies = {}
 round_lock = Lock()
 
+DEFAULT_PROMPTS = [
+    "A raccoon running a fancy restaurant",
+    "A knight arguing with a parking meter",
+    "A penguin attempting to rob a bank",
+    "Average UCI student but make it funny",
+    "Average UCLA student but make it funny"
+]
+
 
 def new_player():
     return {"prompt": None, "image_url": None, "image_ready": False, "score": 0}
@@ -53,7 +61,8 @@ def update_prompting(lobby):
             lobby["phase"] = "GENERATING"
             for player in lobby["players"].values():
                 if player["prompt"] is None:
-                    player["image_ready"] = True
+                    player["prompt"] = random.choice(DEFAULT_PROMPTS)
+                    images.image_queue.submit(images.generate_image, player)
         if lobby["phase"] == "GENERATING":
             start_next_image(lobby)
 
@@ -231,11 +240,9 @@ def store_prompt(lobby_id: int, request: AddPromptRequest):
         if (lobby["phase"] != "PROMPTING" or request.username not in lobby["players"]
                 or time.monotonic() >= lobby["prompt_deadline"]):
             raise HTTPException(status_code=404, detail="Not right phase or player not in list")
-        if not request.prompt.strip():
-            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
         player = lobby["players"][request.username]
         if player["prompt"] is None:
-            player["prompt"] = request.prompt.strip()
+            player["prompt"] = request.prompt.strip() or random.choice(DEFAULT_PROMPTS) # second choice auto fills a prompt if empty
             images.image_queue.submit(images.generate_image, player)
     update_prompting(lobbies[lobby_id])
 

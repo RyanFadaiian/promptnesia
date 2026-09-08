@@ -119,7 +119,7 @@ function LobbyPage() {
   }
 
   async function submitPrompt() {
-    if (!prompt.trim() || submitted || secondsLeft === 0) return;
+    if (submitted || secondsLeft === 0) return;
 
     try {
       await api(`/lobbies/${lobbyId}/prompt`, "POST", { username, prompt });

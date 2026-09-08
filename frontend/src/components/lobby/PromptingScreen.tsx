@@ -36,7 +36,7 @@ export default function PromptingScreen({
           />
         </label>
 
-        <button className="play-button" type="submit" disabled={submitted || secondsLeft === 0 || !prompt.trim()}>
+        <button className="play-button" type="submit" disabled={submitted || secondsLeft === 0}>
           {submitted ? "Submitted" : "Submit"}
         </button>
       </form>

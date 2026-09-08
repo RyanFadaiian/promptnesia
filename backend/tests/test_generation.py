@@ -130,14 +130,34 @@ class GenerationTests(unittest.TestCase):
                 self.assertTrue(player["image_ready"])
                 self.assertEqual(player["image_url"], "/not_allowed.png")
 
-    def test_timeout_skips_missing_prompt(self):
+    def test_timeout_generates_missing_prompt_once(self):
         game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="A cat"))
         with patch.object(game.time, "monotonic", return_value=self.lobby["prompt_deadline"]):
-            self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
-        images.generate_image(self.lobby["players"]["Host"])
-        self.generate.assert_called_once_with(model="gpt-image-2", prompt="A cat")
-        self.assertEqual(self.lobby["players"]["Guest"]["image_url"], "/2.png")
+            self.assertEqual(game.send_state(self.code)["phase"], "GENERATING")
+            game.send_state(self.code)
+        guest = self.lobby["players"]["Guest"]
+        self.assertIn(guest["prompt"], game.DEFAULT_PROMPTS)
+        self.assertFalse(guest["image_ready"])
+        self.assertEqual(self.worker.submit.call_count, 2)
+        self.worker.submit.assert_called_with(images.generate_image, guest)
+        self.assertEqual(self.lobby["players"]["Host"]["prompt"], "A cat")
+        images.generate_image(guest)
+        self.generate.assert_called_once_with(model="gpt-image-2", prompt=guest["prompt"])
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
+
+    def test_blank_submission_generates_fallback_once(self):
+        for prompt in ["", "   "]:
+            with self.subTest(prompt=prompt):
+                self.lobby["players"]["Host"] = game.new_player()
+                self.worker.reset_mock()
+                request = game.AddPromptRequest(username="Host", prompt=prompt)
+                game.store_prompt(self.code, request)
+                player = self.lobby["players"]["Host"]
+                self.assertIn(player["prompt"], game.DEFAULT_PROMPTS)
+                chosen_prompt = player["prompt"]
+                game.store_prompt(self.code, request)
+                self.assertEqual(player["prompt"], chosen_prompt)
+                self.worker.submit.assert_called_once_with(images.generate_image, player)
 
     def test_submission_queues_once_before_prompting_ends(self):
         request = game.AddPromptRequest(username="Host", prompt="A cat")
@@ -161,8 +181,8 @@ class GenerationTests(unittest.TestCase):
         images.generate_image(self.lobby["players"]["Host"])
         with patch.object(game.time, "monotonic", return_value=self.lobby["prompt_deadline"]):
             self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
-        self.assertTrue(self.lobby["players"]["Guest"]["image_ready"])
-        self.assertEqual(self.worker.submit.call_count, 1)
+        self.assertFalse(self.lobby["players"]["Guest"]["image_ready"])
+        self.assertEqual(self.worker.submit.call_count, 2)
 
 
 if __name__ == "__main__":
