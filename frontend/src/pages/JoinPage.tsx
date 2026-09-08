@@ -4,15 +4,20 @@ import { useParams } from 'react-router';
 
 function JoinPage() {
   const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+  const [joining, setJoining] = useState(false);
   const navigate = useNavigate();
   const { lobbyId } = useParams();
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (joining) return;
+    setError("");
 
     const trimmedUsername = username.trim();
 
     if (!trimmedUsername) {
+      setError("Enter a username to join.");
       return;
     }
 
@@ -22,6 +27,7 @@ function JoinPage() {
       username: trimmedUsername, 
     };
 
+    setJoining(true);
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -32,15 +38,18 @@ function JoinPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        const result = await response.json();
+        setError(typeof result.detail === "string" ? result.detail : "Could not join the lobby. Please try again.");
+        return;
       }
 
-      const result = await response.json();
       navigate(`/lobby/${lobbyId}`, {
         state: { username: trimmedUsername },
       });
-    } catch (error) {
-      console.error('Error sending POST request:', error);
+    } catch {
+      setError("Could not connect to the server. Please try again.");
+    } finally {
+      setJoining(false);
     }
   }
 
@@ -54,14 +63,22 @@ function JoinPage() {
             type="text"
             name="username"
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              setError("");
+            }}
+            disabled={joining}
+            aria-label="Username"
+            aria-describedby={error ? "join-error" : undefined}
             placeholder="Enter your username"
             autoComplete="username"
           />
         </label>
 
-        <button className="play-button" type="submit">
-          Play!
+        {error && <p id="join-error" role="alert" style={{ color: "white", margin: 0, textAlign: "center" }}>{error}</p>}
+
+        <button className="play-button" type="submit" disabled={joining}>
+          {joining ? "Joining..." : "Play!"}
         </button>
       </form>
     </main>
