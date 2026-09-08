@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from app import main as game
 
 
@@ -90,6 +91,48 @@ class GuessingTests(unittest.TestCase):
         self.assertNotIn("prompt_deadline", self.lobby)
         game.join_lobby(self.code, game.AddPlayerRequest(username="Guest"))
         self.assertEqual(game.start_game(self.code), "PROMPTING")
+
+    def test_round_settings_require_host_and_lobby_and_valid_range(self):
+        for rounds in [0, 4, 1.5]:
+            with self.assertRaises(ValidationError):
+                game.SetRoundsRequest(username="Host", rounds=rounds)
+        with self.assertRaises(HTTPException) as error:
+            game.set_rounds(self.code, game.SetRoundsRequest(username="Guest", rounds=2))
+        self.assertEqual(error.exception.status_code, 403)
+        game.set_rounds(self.code, game.SetRoundsRequest(username="Host", rounds=3))
+        self.assertEqual(game.send_state(self.code)["rounds"], 3)
+        self.start()
+        with self.assertRaises(HTTPException) as error:
+            game.set_rounds(self.code, game.SetRoundsRequest(username="Host", rounds=1))
+        self.assertEqual(error.exception.status_code, 409)
+
+    def test_three_rounds_keep_scores_and_reset_prompts(self):
+        game.set_rounds(self.code, game.SetRoundsRequest(username="Host", rounds=3))
+        self.start(guests=("Alice",))
+        for round_number in range(1, 4):
+            self.assertEqual(self.lobby["current_round"], round_number)
+            if round_number > 1:
+                self.assertEqual(self.lobby["phase"], "PROMPTING")
+                self.assertEqual(self.lobby["guesses"], {})
+                self.assertEqual(self.lobby["shown_images"], [])
+                for name, player in self.lobby["players"].items():
+                    self.assertIsNone(player["prompt"])
+                    self.assertFalse(player["image_ready"])
+                    game.store_prompt(self.code, game.AddPromptRequest(username=name, prompt="New prompt"))
+                    player["image_ready"] = True
+                game.update_prompting(self.lobby)
+            for index, (author, guesser) in enumerate([("Host", "Alice"), ("Alice", "Host")]):
+                self.guess(guesser, index=index)
+                self.pick(author, guesser, index)
+                self.now.return_value += 5
+                game.send_state(self.code)
+            self.assertEqual(self.lobby["players"]["Host"]["score"], round_number)
+            self.assertEqual(self.lobby["players"]["Alice"]["score"], round_number)
+        self.assertEqual(self.lobby["phase"], "GAME_OVER")
+        game.return_to_lobby(self.code, game.ReturnToLobbyRequest(username="Host"))
+        self.assertEqual(self.lobby["current_round"], 0)
+        self.assertEqual(self.lobby["rounds"], 3)
+        self.assertEqual(self.lobby["players"]["Host"]["score"], 0)
 
     def test_only_author_can_pick_a_submitted_guess_once(self):
         self.start()

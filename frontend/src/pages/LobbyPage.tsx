@@ -14,6 +14,8 @@ interface LobbyLocationState {
 }
 
 interface LobbyState {
+  rounds: number;
+  current_round: number;
   phase: string;
   seconds_left: number;
   submitted_players: string[];
@@ -37,6 +39,8 @@ function LobbyPage() {
   const [players, setPlayers] = useState<string[]>([]);
   const [host, setHost] = useState<string>();
   const [phase, setPhase] = useState("LOBBY");
+  const [rounds, setRounds] = useState(1);
+  const [currentRound, setCurrentRound] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(40);
   const [submittedPlayers, setSubmittedPlayers] = useState<string[]>([]);
@@ -56,6 +60,11 @@ function LobbyPage() {
     setRoundError("");
   }, [currentImageIndex]);
 
+  useEffect(() => {
+    setPrompt("");
+    setRoundError("");
+  }, [currentRound]);
+
   const updatePlayers = useCallback(async () => {
     const result = await api<{ players: string[]; host: string }>(`/lobbies/${lobbyId}`);
     setPlayers(result.players);
@@ -65,6 +74,8 @@ function LobbyPage() {
   const updateState = useCallback(async () => {
     const result = await api<LobbyState>(`/lobbies/${lobbyId}/state`);
     setPhase(result.phase);
+    setRounds(result.rounds);
+    setCurrentRound(result.current_round);
     setSecondsLeft(result.seconds_left);
     setSubmittedPlayers(result.submitted_players);
     setCurrentImageIndex(result.current_image_index);
@@ -111,6 +122,19 @@ function LobbyPage() {
       await updateState();
     } catch (error) {
       console.error(error);
+    }
+  }
+
+  async function changeRounds(value: number) {
+    setSubmittingRound(true);
+    setRoundError("");
+    try {
+      await api(`/lobbies/${lobbyId}/rounds`, "POST", { username, rounds: value });
+      await updateState();
+    } catch (error) {
+      setRoundError(error instanceof Error ? error.message : "Could not change rounds.");
+    } finally {
+      setSubmittingRound(false);
     }
   }
 
@@ -172,6 +196,10 @@ function LobbyPage() {
         username={username}
         handleCopyInviteLink={handleCopyInviteLink}
         startGame={startGame}
+        rounds={rounds}
+        changeRounds={changeRounds}
+        savingRounds={submittingRound}
+        roundsError={roundError}
       />
     );
   } else if (phase === "PROMPTING") {

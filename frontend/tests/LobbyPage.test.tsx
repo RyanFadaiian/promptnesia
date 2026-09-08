@@ -8,6 +8,7 @@ function setupLobby() {
   const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
     url.endsWith('/state') ? {
       phase: 'LOBBY', seconds_left: 0, submitted_players: [],
+      rounds: 1, current_round: 0,
       current_image_index: 0, current_image: null, guessed_players: [],
       eligible_guessers: 1, guesses: {}, winner: null, scores: {},
     } : { players: ['Host', 'Guest'], host: 'Host' },

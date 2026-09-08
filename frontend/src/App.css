@@ -166,6 +166,18 @@ input {
   color: #174a80;
 }
 
+.rounds-setting {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.rounds-setting input {
+  width: 120px;
+  accent-color: #2f74c0;
+}
+
 .home-tagline {
   max-width: 360px;
   margin: 0 0 24px;
@@ -205,6 +217,14 @@ input {
   background: white;
   color: #174a80;
   font-family: "Neucha", cursive;
+}
+
+.music-credit {
+  position: fixed;
+  bottom: 70px;
+  left: 20px;
+  color: white;
+  font-size: 16px;
 }
 
 .music-player input {

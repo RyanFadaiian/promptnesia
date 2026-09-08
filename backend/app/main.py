@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import random
 import math
 import time
@@ -32,6 +32,15 @@ DEFAULT_PROMPTS = [
 
 def new_player():
     return {"prompt": None, "image_url": None, "image_ready": False, "score": 0}
+
+
+def start_round(lobby):
+    lobby["current_round"] += 1
+    lobby.update(phase="PROMPTING", current_image_index=0, shown_images=[],
+                 guesses={}, winner=None, next_image_at=None,
+                 prompt_deadline=time.monotonic() + 40)
+    for index, player in enumerate(lobby["players"].values()):
+        player.update(prompt=None, image_url=f"/{index % 3 + 1}.png", image_ready=False)
 
 
 def submitted_players(lobby):
@@ -82,7 +91,10 @@ def update_reveal(lobby):
         if (lobby["phase"] == "REVEAL" and lobby["next_image_at"] is not None
                 and time.monotonic() >= lobby["next_image_at"]):
             if len(lobby["shown_images"]) == len(lobby["players"]):
-                lobby["phase"] = "GAME_OVER"
+                if lobby["current_round"] < lobby["rounds"]:
+                    start_round(lobby)
+                else:
+                    lobby["phase"] = "GAME_OVER"
             else:
                 start_next_image(lobby)
 
@@ -95,6 +107,10 @@ class AddPlayerRequest(BaseModel):
 
 class ReturnToLobbyRequest(BaseModel):
     username: str
+
+class SetRoundsRequest(BaseModel):
+    username: str
+    rounds: int = Field(ge=1, le=3, strict=True)
 
 class AddPromptRequest(BaseModel):
     username: str
@@ -130,6 +146,8 @@ def create_lobby(request: CreateLobbyRequest):
         "host": request.username,
         "players": {request.username: new_player()},
         "phase": "LOBBY",
+        "rounds": 1,
+        "current_round": 0,
         "current_image_index": 0,
         "shown_images": [],
         "guesses": {},
@@ -169,11 +187,22 @@ def start_game(lobby_id: int):
     if lobbies[lobby_id]["phase"] == "LOBBY":
         if len(lobbies[lobby_id]["players"]) < 2:
             raise HTTPException(status_code=400, detail="You need at least 2 players to start the game!")
-        for index, player in enumerate(lobbies[lobby_id]["players"].values()):
-            player["image_url"] = f"/{index % 3 + 1}.png"
-        lobbies[lobby_id]["phase"] = "PROMPTING"
-        lobbies[lobby_id]["prompt_deadline"] = time.monotonic() + 40
+        start_round(lobbies[lobby_id])
     return lobbies[lobby_id]["phase"]
+
+
+@app.post("/api/lobbies/{lobby_id}/rounds")
+def set_rounds(lobby_id: int, request: SetRoundsRequest):
+    if lobby_id not in lobbies:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+    lobby = lobbies[lobby_id]
+    with round_lock:
+        if request.username != lobby["host"]:
+            raise HTTPException(status_code=403, detail="Only the host can change rounds")
+        if lobby["phase"] != "LOBBY":
+            raise HTTPException(status_code=409, detail="The game has already started")
+        lobby["rounds"] = request.rounds
+    return {"rounds": lobby["rounds"]}
 
 @app.post("/api/lobbies/{lobby_id}/return")
 def return_to_lobby(lobby_id: int, request: ReturnToLobbyRequest):
@@ -187,6 +216,7 @@ def return_to_lobby(lobby_id: int, request: ReturnToLobbyRequest):
             raise HTTPException(status_code=409, detail="The game is not over yet")
         lobby.update(
             phase="LOBBY",
+            current_round=0,
             players={name: new_player() for name in lobby["players"]},
             current_image_index=0,
             shown_images=[],
@@ -220,6 +250,8 @@ def send_state(lobby_id: int):
             current_image["prompt"] = lobby["players"][username]["prompt"]
     return {
         "phase": lobby["phase"],
+        "rounds": lobby["rounds"],
+        "current_round": lobby["current_round"],
         "seconds_left": max(0, math.ceil(lobby["prompt_deadline"] - time.monotonic()))
         if lobby["phase"] == "PROMPTING" else 0,
         "submitted_players": submitted_players(lobby),
