@@ -14,6 +14,10 @@ function App() {
       <Route path="/lobby/:lobbyId" element={<LobbyPage />} />
     </Routes>
     <MusicPlayer />
+    <small className="music-credit">♫ Kevin MacLeod</small>
+    <a className="author-credit" href="https://github.com/RyanFadaiian" target="_blank" rel="noopener noreferrer">
+      Made by Ryan
+    </a>
     </>
   );
 }

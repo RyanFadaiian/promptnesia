@@ -47,7 +47,6 @@ function HomePage() {
           Create Game
         </button>
       </form>
-      <small className="music-credit">Music: Kevin MacLeod</small>
     </main>
   );
 }
