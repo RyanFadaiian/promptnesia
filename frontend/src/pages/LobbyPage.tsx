@@ -1,3 +1,8 @@
+import LobbyScreen from "../components/lobby/LobbyScreen";
+import PromptingScreen from "../components/lobby/PromptingScreen";
+import GuessingScreen from "../components/lobby/GuessingScreen";
+import GameOverScreen from "../components/lobby/GameOverScreen";
+import type { CurrentImage } from "../components/lobby/GuessingScreen";
 import { api } from "../api";
 import { Navigate, useLocation } from "react-router";
 import { useParams } from 'react-router';
@@ -6,13 +11,6 @@ import { useEffect, useState } from "react";
 
 interface LobbyLocationState {
   username?: string;
-}
-
-interface CurrentImage {
-  number: number;
-  username: string;
-  image_url: string;
-  prompt?: string | null;
 }
 
 interface LobbyState {
@@ -165,79 +163,28 @@ function LobbyPage() {
 
   if (phase === "LOBBY") {
     return (
-      <main className="App">
-        <h1 className="heading">Lobby</h1>
-
-        <section className="lobby">
-          <p>
-            Lobby code: <strong>{lobbyId}</strong>
-          </p>
-
-          <div className="invite-link">
-            <input
-              type="text"
-              value={inviteLink}
-              aria-label="Lobby invite link"
-              readOnly
-            />
-
-            <button type="button" onClick={handleCopyInviteLink}>
-              {copied ? "Copied!" : "Copy Link"}
-            </button>
-          </div>
-
-          <h2>Players</h2>
-
-          <ul>
-            {players.map((username) => {
-
-              return username === host ? (
-                <li key={username}>
-                  {username} (Host)
-                </li>
-              ) : (
-                <li key={username}>{username}</li>
-              );
-            })}
-          </ul>
-
-          {username === host ? (
-            <button className="play-button" type="button" onClick={startGame}>Start</button>
-          ) : null}
-        </section>
-      </main>
+      <LobbyScreen
+        lobbyId={lobbyId}
+        inviteLink={inviteLink}
+        copied={copied}
+        players={players}
+        host={host}
+        username={username}
+        handleCopyInviteLink={handleCopyInviteLink}
+        startGame={startGame}
+      />
     );
   } else if (phase === "PROMPTING") {
     return (
-      <main className="App">
-        <h1 className="heading">Write a prompt</h1>
-        <p style={{ color: "white", margin: "0 0 16px" }}>
-          {secondsLeft}s remaining · {submittedPlayers.length} / {players.length} submitted
-        </p>
-
-        <form
-          className="home-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitPrompt().catch(console.error);
-          }}
-        >
-          <label className="username-field">
-            <input
-              placeholder="Enter your prompt"
-              aria-label="Your prompt"
-              required
-              value={prompt}
-              disabled={submitted || secondsLeft === 0}
-              onChange={(event) => setPrompt(event.target.value)}
-            />
-          </label>
-
-          <button className="play-button" type="submit" disabled={submitted || secondsLeft === 0 || !prompt.trim()}>
-            {submitted ? "Submitted" : "Submit"}
-          </button>
-        </form>
-      </main>
+      <PromptingScreen
+        secondsLeft={secondsLeft}
+        submittedPlayers={submittedPlayers}
+        players={players}
+        prompt={prompt}
+        submitted={submitted}
+        setPrompt={setPrompt}
+        submitPrompt={submitPrompt}
+      />
     );
   } else if (phase === "GENERATING") {
     return (
@@ -247,105 +194,32 @@ function LobbyPage() {
     );
   } else if ((phase === "GUESSING" || phase === "REVEAL") && currentImage) {
     return (
-      <main className="App">
-        <h1 className="heading">{phase === "REVEAL" ? "The original prompt" : "Guess the prompt"}</h1>
-        <p style={{ color: "white", margin: "0 0 16px" }}>
-          Image {currentImage.number} of {players.length}
-        </p>
-
-        <section className="home-form">
-          <img
-            className="guessing-image"
-            src={currentImage.image_url}
-            alt="Image for the current guessing round"
-          />
-          {phase === "REVEAL" ? (
-            <section className="lobby" style={{ marginTop: 16 }}>
-              <p><strong>{currentImage.username}:</strong> {currentImage.prompt ?? "No prompt submitted"}</p>
-              <h2>Guesses</h2>
-              {winner ? (
-                <p role="status"><strong>{winner} wins 1 point!</strong> Moving on in a few seconds...</p>
-              ) : Object.keys(guesses).length > 0 ? (
-                <p>{currentImage.username === username ? "Pick your favorite guess." : `${currentImage.username} is picking a favorite.`}</p>
-              ) : null}
-              {Object.keys(guesses).length === 0 ? <p>No guesses.</p> : (
-                <ul>
-                  {Object.entries(guesses).map(([player, guess]) => (
-                    <li key={player}>
-                      <strong>{player}:</strong> {guess}
-                      {currentImage.username === username && !winner && (
-                        <button
-                          className="play-button"
-                          type="button"
-                          disabled={submittingRound}
-                          onClick={() => void submitRound("winner", player)}
-                        >
-                          Pick winner
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {roundError && <p role="alert">{roundError}</p>}
-            </section>
-          ) : (
-            <>
-              <p style={{ color: "white" }} aria-live="polite">
-                {guessedPlayers.length} / {eligibleGuessers} guessed
-              </p>
-              {currentImage.username === username ? (
-                <p style={{ color: "white" }}>Your image — other players are guessing.</p>
-              ) : (
-                <form
-                  className="home-form"
-                  key={currentImageIndex}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const guess = new FormData(event.currentTarget).get("guess") as string;
-                    void submitRound("guess", guess);
-                  }}
-                >
-                  <label className="username-field">
-                    <input
-                      name="guess"
-                      required
-                      pattern=".*\S.*"
-                      disabled={guessed || submittingRound}
-                      aria-label="Your guess"
-                      placeholder="What was the original prompt?"
-                      autoComplete="off"
-                    />
-                  </label>
-                  <button className="play-button" type="submit" disabled={guessed || submittingRound}>
-                    {guessed ? "Submitted" : submittingRound ? "Submitting..." : "Submit"}
-                  </button>
-                  {roundError && <p role="alert" style={{ color: "white" }}>{roundError}</p>}
-                </form>
-              )}
-            </>
-          )}
-        </section>
-      </main>
+      <GuessingScreen
+        phase={phase}
+        currentImage={currentImage}
+        currentImageIndex={currentImageIndex}
+        players={players}
+        username={username}
+        guesses={guesses}
+        winner={winner}
+        submittingRound={submittingRound}
+        roundError={roundError}
+        guessedPlayers={guessedPlayers}
+        eligibleGuessers={eligibleGuessers}
+        guessed={guessed}
+        submitRound={submitRound}
+      />
     );
   } else if (phase === "GAME_OVER") {
     return (
-      <main className="App">
-        <h1 className="heading">Final scores</h1>
-        <section className="lobby">
-          <ul>
-            {Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([player, score]) => (
-              <li key={player}><strong>{player}:</strong> {score}</li>
-            ))}
-          </ul>
-          {username === host ? (
-            <button className="play-button" type="button" disabled={submittingRound} onClick={returnToLobby}>
-              Return to Lobby
-            </button>
-          ) : null}
-          {roundError && <p role="alert">{roundError}</p>}
-        </section>
-      </main>
+      <GameOverScreen
+        scores={scores}
+        username={username}
+        host={host}
+        submittingRound={submittingRound}
+        roundError={roundError}
+        returnToLobby={returnToLobby}
+      />
     );
   }
 }
