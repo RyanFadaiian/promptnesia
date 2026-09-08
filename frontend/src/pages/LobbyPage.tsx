@@ -1,3 +1,4 @@
+import { api } from "../api";
 import { Navigate, useLocation } from "react-router";
 import { useParams } from 'react-router';
 import { useEffect, useState } from "react";
@@ -12,6 +13,19 @@ interface CurrentImage {
   username: string;
   image_url: string;
   prompt?: string | null;
+}
+
+interface LobbyState {
+  phase: string;
+  seconds_left: number;
+  submitted_players: string[];
+  current_image_index: number;
+  current_image: CurrentImage | null;
+  guessed_players: string[];
+  eligible_guessers: number;
+  guesses: Record<string, string>;
+  winner: string | null;
+  scores: Record<string, number>;
 }
 
 function LobbyPage() {
@@ -45,13 +59,7 @@ function LobbyPage() {
   }, [currentImageIndex]);
 
   async function updatePlayers() {
-    const response = await fetch(
-      `http://127.0.0.1:8000/api/lobbies/${lobbyId}`
-    );
-
-    if (!response.ok) return;
-
-    const result = await response.json();
+    const result = await api<{ players: string[]; host: string }>(`/lobbies/${lobbyId}`);
     setPlayers(result.players);
     setHost(result.host);
   }
@@ -82,13 +90,12 @@ function LobbyPage() {
   }
 
   async function startGame() {
-    const response = await fetch(
-      `http://127.0.0.1:8000/api/lobbies/${lobbyId}/start`, {method: "POST",}
-    );
-
-    if (!response.ok) return;
-
-    await updateState();
+    try {
+      await api(`/lobbies/${lobbyId}/start`, "POST");
+      await updateState();
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   if (!username) {
@@ -96,13 +103,7 @@ function LobbyPage() {
   }
 
   async function updateState() {
-    const response = await fetch(
-      `http://127.0.0.1:8000/api/lobbies/${lobbyId}/state`
-    );
-
-    if (!response.ok) return;
-
-    const result = await response.json();
+    const result = await api<LobbyState>(`/lobbies/${lobbyId}/state`);
     setPhase(result.phase);
     setSecondsLeft(result.seconds_left);
     setSubmittedPlayers(result.submitted_players);
@@ -122,21 +123,11 @@ function LobbyPage() {
   async function submitPrompt() {
     if (!prompt.trim() || submitted || secondsLeft === 0) return;
 
-    const response = await fetch(
-      `http://127.0.0.1:8000/api/lobbies/${lobbyId}/prompt`, {
-        method: "POST",
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          username: username,
-          prompt: prompt
-        })
-      }
-    );
-    if (!response.ok) {
+    try {
+      await api(`/lobbies/${lobbyId}/prompt`, "POST", { username, prompt });
+    } finally {
       await updateState();
-      return;
     }
-    await updateState();
   }
 
 
@@ -145,18 +136,15 @@ function LobbyPage() {
     setSubmittingRound(true);
     setRoundError("");
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/lobbies/${lobbyId}/${action}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ username, current_image_index: currentImageIndex, [action]: value }),
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        setRoundError(result.detail || "Could not submit. Please try again.");
+      try {
+        await api(`/lobbies/${lobbyId}/${action}`, "POST", {
+          username, current_image_index: currentImageIndex, [action]: value,
+        });
+      } finally {
+        await updateState();
       }
-      await updateState();
-    } catch {
-      setRoundError("Could not submit. Please try again.");
+    } catch (error) {
+      setRoundError(error instanceof Error ? error.message : "Could not submit. Please try again.");
     } finally {
       setSubmittingRound(false);
     }
@@ -166,15 +154,10 @@ function LobbyPage() {
     setSubmittingRound(true);
     setRoundError("");
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/lobbies/${lobbyId}/return`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ username }),
-      });
-      if (!response.ok) throw new Error("Could not return to lobby");
+      await api(`/lobbies/${lobbyId}/return`, "POST", { username });
       await updateState();
-    } catch {
-      setRoundError("Could not return to lobby. Please try again.");
+    } catch (error) {
+      setRoundError(error instanceof Error ? error.message : "Could not return to lobby. Please try again.");
     } finally {
       setSubmittingRound(false);
     }

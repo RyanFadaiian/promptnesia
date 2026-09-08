@@ -1,3 +1,4 @@
+import { api } from "../api";
 import { type SubmitEvent, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -14,27 +15,8 @@ function HomePage() {
       return;
     }
 
-    const url = 'http://127.0.0.1:8000/api/lobbies';
-  
-    // Define your lobby payload data here
-    const data = { 
-      username: trimmedUsername, 
-    };
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await api<{ id: number }>("/lobbies", "POST", { username: trimmedUsername });
       navigate(`/lobby/${result.id}`, {
         state: { username: trimmedUsername },
       });
