@@ -31,7 +31,7 @@ app.add_middleware(
 
 lobbies = {}
 round_lock = Lock()
-image_queue = ThreadPoolExecutor(max_workers=1)
+image_queue = ThreadPoolExecutor(max_workers=3)
 
 
 def new_player():
