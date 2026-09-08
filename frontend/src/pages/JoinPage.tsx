@@ -38,8 +38,9 @@ function JoinPage() {
   return (
     <main className="App">
       <h1 className="heading">Prompnesia</h1>
+      <p className="home-tagline">Join your friends in lobby {lobbyId}.</p>
 
-      <form className="home-form" onSubmit={handleSubmit}>
+      <form className="home-form form-panel" onSubmit={handleSubmit}>
         <label className="username-field">
           <input
             type="text"

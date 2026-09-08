@@ -191,7 +191,7 @@ function LobbyPage() {
       <main className="App">
         <h1 className="heading">Generating images</h1>
         <div>
-          <img src="/loading.gif" alt="Loading cat" />
+          <img className="home-mascot" src="/loading.gif" alt="Loading cat" />
         </div>
       </main>
     );

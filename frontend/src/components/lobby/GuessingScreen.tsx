@@ -27,7 +27,7 @@ export default function GuessingScreen({
   return (
     <main className="App">
       <h1 className="heading">{phase === "REVEAL" ? "The original prompt" : "Guess the prompt"}</h1>
-      <p style={{ color: "white", margin: "0 0 16px" }}>
+      <p className="round-status">
         Image {currentImage.number} of {players.length}
       </p>
 

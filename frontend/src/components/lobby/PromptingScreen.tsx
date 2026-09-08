@@ -14,12 +14,12 @@ export default function PromptingScreen({
   return (
     <main className="App">
       <h1 className="heading">Write a prompt</h1>
-      <p style={{ color: "white", margin: "0 0 16px" }}>
+      <p className="round-status">
         {secondsLeft}s remaining · {submittedPlayers.length} / {players.length} submitted
       </p>
 
       <form
-        className="home-form"
+        className="home-form form-panel"
         onSubmit={(event) => {
           event.preventDefault();
           submitPrompt().catch(console.error);
