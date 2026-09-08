@@ -11,7 +11,7 @@ class GuessingTests(unittest.TestCase):
         self.clock = patch.object(game.time, "monotonic", return_value=100)
         self.now = self.clock.start()
         self.addCleanup(self.clock.stop)
-        worker = patch.object(game, "Thread")
+        worker = patch.object(game, "image_queue")
         worker.start()
         self.addCleanup(worker.stop)
         self.lobby = game.create_lobby(game.CreateLobbyRequest(username="Host"))

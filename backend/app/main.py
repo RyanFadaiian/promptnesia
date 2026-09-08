@@ -5,7 +5,8 @@ from pydantic import BaseModel
 import random
 import math
 import time
-from threading import Lock, Thread
+from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
 import base64
 import logging
 from uuid import uuid4
@@ -30,10 +31,11 @@ app.add_middleware(
 
 lobbies = {}
 round_lock = Lock()
+image_queue = ThreadPoolExecutor(max_workers=1)
 
 
 def new_player():
-    return {"prompt": None, "image_url": None, "score": 0}
+    return {"prompt": None, "image_url": None, "image_ready": False, "score": 0}
 
 
 def submitted_players(lobby):
@@ -43,20 +45,21 @@ def submitted_players(lobby):
     ]
 
 
-def generate_images(lobby):
-    for player in lobby["players"].values():
-        if not player["prompt"]:
-            continue
-        try:
-            result = client.images.generate(model="gpt-image-2", prompt=player["prompt"])
-            filename = f"{uuid4().hex}.png"
-            (generated_dir / filename).write_bytes(base64.b64decode(result.data[0].b64_json, validate=True))
-            player["image_url"] = f"http://127.0.0.1:8000/generated/{filename}"
-        except Exception as error:
-            logging.warning("Image generation failed (%s); using placeholder", type(error).__name__)
-    with round_lock:
-        lobby["current_image_index"] = 0
-        lobby["phase"] = "GUESSING"
+def generate_image(player):
+    try:
+        result = client.images.generate(model="gpt-image-2", prompt=player["prompt"])
+        image_id = uuid4().hex
+        filename = image_id + ".png"
+        image_path = generated_dir / filename
+
+        image_base64 = result.data[0].b64_json
+        image_bytes = base64.b64decode(image_base64, validate=True)
+        image_path.write_bytes(image_bytes)
+        player["image_url"] = f"http://127.0.0.1:8000/generated/{filename}"
+    except Exception as error:
+        logging.warning("Image generation failed (%s); using placeholder", type(error).__name__)
+    finally:
+        player["image_ready"] = True
 
 
 def update_prompting(lobby):
@@ -66,9 +69,11 @@ def update_prompting(lobby):
             or len(submitted_players(lobby)) == len(lobby["players"])
         ):
             lobby["phase"] = "GENERATING"
-            for index, player in enumerate(lobby["players"].values()):
-                player["image_url"] = f"/{index % 3 + 1}.png"
-            Thread(target=generate_images, args=(lobby,), daemon=True).start()
+            for player in lobby["players"].values():
+                if player["prompt"] is None:
+                    player["image_ready"] = True
+        if lobby["phase"] == "GENERATING" and all(player["image_ready"] for player in lobby["players"].values()):
+            lobby["phase"] = "GUESSING"
 
 
 def update_guessing(lobby):
@@ -173,6 +178,8 @@ def start_game(lobby_id: int):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
 
     if lobbies[lobby_id]["phase"] == "LOBBY":
+        for index, player in enumerate(lobbies[lobby_id]["players"].values()):
+            player["image_url"] = f"/{index % 3 + 1}.png"
         lobbies[lobby_id]["phase"] = "PROMPTING"
         lobbies[lobby_id]["prompt_deadline"] = time.monotonic() + 40
     return lobbies[lobby_id]["phase"]
@@ -237,14 +244,17 @@ def store_prompt(lobby_id: int, request: AddPromptRequest):
     if lobby_id not in lobbies:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lobby not found")
     update_prompting(lobbies[lobby_id])
-    if lobbies[lobby_id]["phase"] != "PROMPTING" or request.username not in lobbies[lobby_id]["players"]:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not right phase or player not in list")
-
-    if not request.prompt.strip():
-        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
-    player = lobbies[lobby_id]["players"][request.username]
-    if player["prompt"] is None:
-        player["prompt"] = request.prompt.strip()
+    with round_lock:
+        lobby = lobbies[lobby_id]
+        if (lobby["phase"] != "PROMPTING" or request.username not in lobby["players"]
+                or time.monotonic() >= lobby["prompt_deadline"]):
+            raise HTTPException(status_code=404, detail="Not right phase or player not in list")
+        if not request.prompt.strip():
+            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+        player = lobby["players"][request.username]
+        if player["prompt"] is None:
+            player["prompt"] = request.prompt.strip()
+            image_queue.submit(generate_image, player)
     update_prompting(lobbies[lobby_id])
 
     return {"status": "received"}
