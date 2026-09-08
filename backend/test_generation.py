@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import httpx2
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -29,6 +30,9 @@ class GenerationTests(unittest.TestCase):
         api = patch.object(game.client.images, "generate", return_value=response)
         self.generate = api.start()
         self.addCleanup(api.stop)
+        rewrite = patch.object(game.client.responses, "create", return_value=SimpleNamespace(output_text="A playful cartoon cat"))
+        self.rewrite = rewrite.start()
+        self.addCleanup(rewrite.stop)
         self.lobby = game.create_lobby(game.CreateLobbyRequest(username="Host"))
         self.code = self.lobby["id"]
         game.join_lobby(self.code, game.AddPlayerRequest(username="Guest"))
@@ -72,6 +76,58 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(self.lobby["players"]["Host"]["image_url"], "/1.png")
         self.assertIn("/generated/", self.lobby["players"]["Guest"]["image_url"])
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
+
+    def rejection(self, code="moderation_blocked"):
+        response = httpx2.Response(400, request=httpx2.Request("POST", "https://api.openai.com/v1/images/generations"))
+        return game.BadRequestError("Rejected", response=response, body={"code": code})
+
+    def test_rejected_prompt_is_rewritten_once(self):
+        player = self.lobby["players"]["Host"]
+        player["prompt"] = "Original joke"
+        self.generate.side_effect = [self.rejection(), self.generate.return_value]
+        game.generate_image(player)
+        self.rewrite.assert_called_once()
+        self.assertEqual(self.rewrite.call_args.kwargs["input"], "Original joke")
+        self.generate.assert_called_with(model="gpt-image-2", prompt="A playful cartoon cat")
+        self.assertEqual(player["prompt"], "Original joke")
+        self.assertIn("/generated/", player["image_url"])
+        self.assertTrue(player["image_ready"])
+
+    def test_second_rejection_uses_not_allowed(self):
+        player = self.lobby["players"]["Host"]
+        player["prompt"] = "Original joke"
+        self.generate.side_effect = [self.rejection(), self.rejection()]
+        with self.assertLogs(level="WARNING"):
+            game.generate_image(player)
+        self.assertEqual(self.generate.call_count, 2)
+        self.rewrite.assert_called_once()
+        self.assertEqual(player["image_url"], "/not_allowed.png")
+        self.assertTrue(player["image_ready"])
+        self.assertTrue((Path(__file__).resolve().parents[1] / "frontend/public/not_allowed.png").is_file())
+
+    def test_unrelated_error_does_not_rewrite(self):
+        player = self.lobby["players"]["Host"]
+        self.generate.side_effect = self.rejection("invalid_value")
+        with self.assertLogs(level="WARNING"):
+            game.generate_image(player)
+        self.rewrite.assert_not_called()
+        self.generate.assert_called_once()
+        self.assertEqual(player["image_url"], "/1.png")
+
+    def test_empty_or_failed_rewrite_finishes_with_fallback(self):
+        for fails in [False, True]:
+            with self.subTest(fails=fails):
+                player = game.new_player()
+                player["prompt"] = "Original joke"
+                self.generate.reset_mock()
+                self.generate.side_effect = self.rejection()
+                self.rewrite.return_value = SimpleNamespace(output_text=" ")
+                self.rewrite.side_effect = RuntimeError("Test failure") if fails else None
+                with patch.object(game.logging, "warning"):
+                    game.generate_image(player)
+                self.generate.assert_called_once()
+                self.assertTrue(player["image_ready"])
+                self.assertEqual(player["image_url"], "/not_allowed.png")
 
     def test_timeout_skips_missing_prompt(self):
         game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="A cat"))
