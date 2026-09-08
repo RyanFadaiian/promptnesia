@@ -24,7 +24,9 @@ class GuessingTests(unittest.TestCase):
         for name in self.lobby["players"]:
             game.store_prompt(self.code, game.AddPromptRequest(username=name, prompt="Secret prompt"))
         # These tests cover gameplay after the image worker finishes.
-        self.lobby["phase"] = "GUESSING"
+        for player in self.lobby["players"].values():
+            player["image_ready"] = True
+        game.update_prompting(self.lobby)
 
     def guess(self, username, guess="A cat", index=0):
         return game.store_guess(self.code, game.AddGuessRequest(
@@ -82,7 +84,7 @@ class GuessingTests(unittest.TestCase):
     def test_single_player_reveals_without_waiting(self):
         self.start(guests=())
         self.assertEqual(game.send_state(self.code)["phase"], "REVEAL")
-        self.now.return_value = 103
+        self.now.return_value = 105
         self.assertEqual(game.send_state(self.code)["phase"], "GAME_OVER")
 
     def test_only_author_can_pick_a_submitted_guess_once(self):
@@ -131,6 +133,7 @@ class GuessingTests(unittest.TestCase):
         self.assertTrue(all(player == game.new_player() for player in self.lobby["players"].values()))
         self.assertEqual(self.lobby["guesses"], {})
         self.assertEqual(self.lobby["current_image_index"], 0)
+        self.assertEqual(self.lobby["shown_images"], [])
         self.assertIsNone(self.lobby["winner"])
         self.assertIsNone(self.lobby["next_image_at"])
         self.assertNotIn("prompt_deadline", self.lobby)
@@ -142,6 +145,53 @@ class GuessingTests(unittest.TestCase):
         game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="New prompt"))
         self.assertEqual(self.lobby["players"]["Host"]["prompt"], "New prompt")
 
+    def test_ready_images_play_out_of_order_and_wait_on_reveal(self):
+        self.start()
+        self.lobby["phase"] = "GENERATING"
+        self.lobby["shown_images"] = []
+        for player in self.lobby["players"].values():
+            player["image_ready"] = False
+        self.assertEqual(game.send_state(self.code)["phase"], "GENERATING")
+        self.lobby["players"]["Bob"]["image_ready"] = True
+        state = game.send_state(self.code)
+        self.assertEqual(state["current_image_index"], 2)
+        self.assertEqual(state["current_image"]["number"], 1)
+        self.guess("Host", index=2)
+        self.guess("Alice", index=2)
+        self.pick("Bob", "Alice", index=2)
+        self.now.return_value = 105
+        state = game.send_state(self.code)
+        self.assertEqual(state["phase"], "REVEAL")
+        self.assertEqual(state["winner"], "Alice")
+        self.assertEqual(state["current_image_index"], 2)
+
+        self.lobby["players"]["Host"]["image_ready"] = True
+        state = game.send_state(self.code)
+        self.assertEqual(state["phase"], "GUESSING")
+        self.assertEqual(state["current_image_index"], 0)
+        self.assertEqual(state["current_image"]["number"], 2)
+        self.assertEqual(state["guessed_players"], [])
+        self.assertIsNone(state["winner"])
+        self.lobby["players"]["Alice"]["image_ready"] = True
+        self.assertEqual(game.send_state(self.code)["current_image_index"], 0)
+        self.guess("Alice")
+        self.guess("Bob")
+        self.now.return_value = 120
+        self.assertEqual(game.send_state(self.code)["phase"], "REVEAL")
+        self.pick()
+        self.now.return_value = 124.9
+        self.assertEqual(game.send_state(self.code)["current_image_index"], 0)
+        self.now.return_value = 125
+        state = game.send_state(self.code)
+        self.assertEqual(state["current_image_index"], 1)
+        self.assertEqual(state["current_image"]["number"], 3)
+        self.guess("Host", index=1)
+        self.guess("Bob", index=1)
+        self.pick("Alice", "Host", index=1)
+        self.now.return_value = 130
+        self.assertEqual(game.send_state(self.code)["phase"], "GAME_OVER")
+        self.assertEqual(self.lobby["shown_images"], [2, 0, 1])
+
     def test_all_images_advance_after_selection_and_finish(self):
         self.start()
         names = list(self.lobby["players"])
@@ -152,7 +202,7 @@ class GuessingTests(unittest.TestCase):
             self.now.return_value += 10
             self.assertEqual(game.send_state(self.code)["phase"], "REVEAL")
             self.pick(author, eligible[0], index)
-            self.now.return_value += 2.9
+            self.now.return_value += 4.9
             self.assertEqual(game.send_state(self.code)["current_image_index"], index)
             self.now.return_value += 0.1
             state = game.send_state(self.code)

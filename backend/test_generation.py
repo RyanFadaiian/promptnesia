@@ -76,7 +76,7 @@ class GenerationTests(unittest.TestCase):
     def test_timeout_skips_missing_prompt(self):
         game.store_prompt(self.code, game.AddPromptRequest(username="Host", prompt="A cat"))
         with patch.object(game.time, "monotonic", return_value=self.lobby["prompt_deadline"]):
-            self.assertEqual(game.send_state(self.code)["phase"], "GENERATING")
+            self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
         game.generate_image(self.lobby["players"]["Host"])
         self.generate.assert_called_once_with(model="gpt-image-2", prompt="A cat")
         self.assertEqual(self.lobby["players"]["Guest"]["image_url"], "/2.png")
@@ -94,7 +94,7 @@ class GenerationTests(unittest.TestCase):
         self.assertTrue(player["image_ready"])
         self.assertEqual(game.send_state(self.code)["phase"], "PROMPTING")
         game.store_prompt(self.code, game.AddPromptRequest(username="Guest", prompt="A dog"))
-        self.assertEqual(game.send_state(self.code)["phase"], "GENERATING")
+        self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")
         self.assertEqual(player["image_url"], url)
         game.generate_image(self.lobby["players"]["Guest"])
         self.assertEqual(game.send_state(self.code)["phase"], "GUESSING")

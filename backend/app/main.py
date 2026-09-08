@@ -62,6 +62,17 @@ def generate_image(player):
         player["image_ready"] = True
 
 
+def start_next_image(lobby):
+    for index, player in enumerate(lobby["players"].values()):
+        if player["image_ready"] and index not in lobby["shown_images"]:
+            lobby["current_image_index"] = index
+            lobby["shown_images"].append(index)
+            lobby["winner"] = None
+            lobby["next_image_at"] = None
+            lobby["phase"] = "GUESSING"
+            return
+
+
 def update_prompting(lobby):
     with round_lock:
         if lobby["phase"] == "PROMPTING" and (
@@ -72,8 +83,8 @@ def update_prompting(lobby):
             for player in lobby["players"].values():
                 if player["prompt"] is None:
                     player["image_ready"] = True
-        if lobby["phase"] == "GENERATING" and all(player["image_ready"] for player in lobby["players"].values()):
-            lobby["phase"] = "GUESSING"
+        if lobby["phase"] == "GENERATING":
+            start_next_image(lobby)
 
 
 def update_guessing(lobby):
@@ -83,20 +94,17 @@ def update_guessing(lobby):
         if all(username in guesses for username in lobby["players"] if username != owner):
             lobby["phase"] = "REVEAL"
             if not guesses:
-                lobby["next_image_at"] = time.monotonic() + 3
+                lobby["next_image_at"] = time.monotonic() + 5
 
 
 def update_reveal(lobby):
     with round_lock:
         if (lobby["phase"] == "REVEAL" and lobby["next_image_at"] is not None
                 and time.monotonic() >= lobby["next_image_at"]):
-            lobby["winner"] = None
-            lobby["next_image_at"] = None
-            if lobby["current_image_index"] + 1 < len(lobby["players"]):
-                lobby["current_image_index"] += 1
-                lobby["phase"] = "GUESSING"
-            else:
+            if len(lobby["shown_images"]) == len(lobby["players"]):
                 lobby["phase"] = "GAME_OVER"
+            else:
+                start_next_image(lobby)
 
 
 class CreateLobbyRequest(BaseModel):
@@ -143,6 +151,7 @@ def create_lobby(request: CreateLobbyRequest):
         "players": {request.username: new_player()},
         "phase": "LOBBY",
         "current_image_index": 0,
+        "shown_images": [],
         "guesses": {},
         "winner": None,
         "next_image_at": None,
@@ -198,6 +207,7 @@ def return_to_lobby(lobby_id: int, request: ReturnToLobbyRequest):
             phase="LOBBY",
             players={name: new_player() for name in lobby["players"]},
             current_image_index=0,
+            shown_images=[],
             guesses={},
             winner=None,
             next_image_at=None,
@@ -220,6 +230,7 @@ def send_state(lobby_id: int):
     if lobby["phase"] in ("GUESSING", "REVEAL"):
         username = list(lobby["players"])[lobby["current_image_index"]]
         current_image = {
+            "number": len(lobby["shown_images"]),
             "username": username,
             "image_url": lobby["players"][username]["image_url"],
         }
@@ -295,5 +306,5 @@ def pick_winner(lobby_id: int, request: PickWinnerRequest):
             raise HTTPException(status_code=400, detail="Choose a player who submitted a guess")
         lobby["winner"] = request.winner
         lobby["players"][request.winner]["score"] += 1
-        lobby["next_image_at"] = time.monotonic() + 3
+        lobby["next_image_at"] = time.monotonic() + 5
     return {"status": "selected"}

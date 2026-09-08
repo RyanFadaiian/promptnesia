@@ -8,6 +8,7 @@ interface LobbyLocationState {
 }
 
 interface CurrentImage {
+  number: number;
   username: string;
   image_url: string;
   prompt?: string | null;
@@ -266,7 +267,7 @@ function LobbyPage() {
       <main className="App">
         <h1 className="heading">{phase === "REVEAL" ? "The original prompt" : "Guess the prompt"}</h1>
         <p style={{ color: "white", margin: "0 0 16px" }}>
-          Image {currentImageIndex + 1} of {players.length}
+          Image {currentImage.number} of {players.length}
         </p>
 
         <section className="home-form">
