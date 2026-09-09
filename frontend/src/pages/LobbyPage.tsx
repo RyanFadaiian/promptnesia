@@ -6,7 +6,7 @@ import type { CurrentImage } from "../components/lobby/GuessingScreen";
 import { api } from "../api";
 import { Navigate, useLocation } from "react-router";
 import { useParams } from 'react-router';
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 
 interface LobbyLocationState {
@@ -42,6 +42,8 @@ function LobbyPage() {
   const [rounds, setRounds] = useState(1);
   const [currentRound, setCurrentRound] = useState(0);
   const [prompt, setPrompt] = useState("");
+  const draftRevision = useRef(0);
+  const [draftError, setDraftError] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(40);
   const [submittedPlayers, setSubmittedPlayers] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -62,6 +64,7 @@ function LobbyPage() {
 
   useEffect(() => {
     setPrompt("");
+    setDraftError("");
     setRoundError("");
   }, [currentRound]);
 
@@ -142,6 +145,20 @@ function LobbyPage() {
     return <Navigate to="/" replace />;
   }
 
+  function updatePrompt(value: string) {
+    setPrompt(value);
+    const revision = ++draftRevision.current;
+    api(`/lobbies/${lobbyId}/prompt/draft`, "POST", {
+      username, prompt: value, current_round: currentRound, revision,
+    }).then(() => {
+      if (revision === draftRevision.current) setDraftError("");
+    }).catch(() => {
+      if (revision === draftRevision.current) {
+        setDraftError("Could not save your latest text. Try submitting it before time runs out.");
+      }
+    });
+  }
+
   async function submitPrompt() {
     if (submitted || secondsLeft === 0) return;
 
@@ -210,7 +227,8 @@ function LobbyPage() {
         players={players}
         prompt={prompt}
         submitted={submitted}
-        setPrompt={setPrompt}
+        setPrompt={updatePrompt}
+        draftError={draftError}
         submitPrompt={submitPrompt}
       />
     );

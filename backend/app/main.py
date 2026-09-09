@@ -47,7 +47,8 @@ def start_round(lobby):
                  guesses={}, winner=None, next_image_at=None,
                  prompt_deadline=time.monotonic() + 40)
     for index, player in enumerate(lobby["players"].values()):
-        player.update(prompt=None, image_url=f"/{index % 3 + 1}.png", image_ready=False)
+        player.update(prompt=None, draft="", draft_revision=0,
+                      image_url=f"/{index % 3 + 1}.png", image_ready=False)
 
 
 def submitted_players(lobby):
@@ -77,7 +78,7 @@ def update_prompting(lobby):
             lobby["phase"] = "GENERATING"
             for player in lobby["players"].values():
                 if player["prompt"] is None:
-                    player["prompt"] = random.choice(DEFAULT_PROMPTS)
+                    player["prompt"] = player["draft"].strip() or random.choice(DEFAULT_PROMPTS)
                     images.image_queue.submit(images.generate_image, player)
         if lobby["phase"] == "GENERATING":
             start_next_image(lobby)
@@ -122,6 +123,11 @@ class SetRoundsRequest(BaseModel):
 class AddPromptRequest(BaseModel):
     username: str
     prompt: str
+
+
+class SavePromptDraftRequest(AddPromptRequest):
+    current_round: int
+    revision: int = Field(ge=1)
 
 
 class AddGuessRequest(BaseModel):
@@ -270,6 +276,23 @@ def send_state(lobby_id: int):
         "winner": lobby["winner"],
         "scores": {name: player["score"] for name, player in lobby["players"].items()},
     }
+
+@app.post("/api/lobbies/{lobby_id}/prompt/draft")
+def save_prompt_draft(lobby_id: int, request: SavePromptDraftRequest):
+    if lobby_id not in lobbies:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+    with round_lock:
+        lobby = lobbies[lobby_id]
+        if (lobby["phase"] != "PROMPTING"
+                or request.current_round != lobby["current_round"]
+                or request.username not in lobby["players"]
+                or time.monotonic() >= lobby["prompt_deadline"]):
+            return {"status": "ignored"}
+        player = lobby["players"][request.username]
+        if player["prompt"] is None and request.revision > player["draft_revision"]:
+            player.update(draft=request.prompt, draft_revision=request.revision)
+    return {"status": "received"}
+
 
 @app.post("/api/lobbies/{lobby_id}/prompt")
 def store_prompt(lobby_id: int, request: AddPromptRequest):

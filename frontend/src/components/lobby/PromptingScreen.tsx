@@ -4,12 +4,13 @@ interface PromptingScreenProps {
   players: string[];
   prompt: string;
   submitted: boolean;
+  draftError?: string;
   setPrompt: (prompt: string) => void;
   submitPrompt: () => Promise<void>;
 }
 
 export default function PromptingScreen({
-  secondsLeft, submittedPlayers, players, prompt, submitted, setPrompt, submitPrompt
+  secondsLeft, submittedPlayers, players, prompt, submitted, setPrompt, submitPrompt, draftError
 }: PromptingScreenProps) {
   return (
     <main className="App">
@@ -17,6 +18,8 @@ export default function PromptingScreen({
       <p className="round-status">
         {secondsLeft}s remaining · {submittedPlayers.length} / {players.length} submitted
       </p>
+      <p>Your prompt is saved as you type and submitted when time runs out.</p>
+      {draftError && <p role="alert">{draftError}</p>}
 
       <form
         className="home-form form-panel"
@@ -29,7 +32,6 @@ export default function PromptingScreen({
           <input
             placeholder="Enter your prompt"
             aria-label="Your prompt"
-            required
             value={prompt}
             disabled={submitted || secondsLeft === 0}
             onChange={(event) => setPrompt(event.target.value)}
