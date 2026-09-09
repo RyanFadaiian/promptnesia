@@ -63,6 +63,21 @@ npm run dev
 
 Open `http://localhost:5173`. The frontend defaults to the local backend at `http://127.0.0.1:8000`. To use a different backend, copy `frontend/.env.example` to `frontend/.env` and change `VITE_API_URL`.
 
+## Run the backend with Docker
+
+With Docker installed and running, configure `backend/.env` as above, then run these commands from the repository root:
+
+```sh
+docker build -t promptnesia-api ./backend
+docker run --rm --name promptnesia-api -p 8000:8000 --env-file backend/.env promptnesia-api
+```
+
+Use `PORT=8000` for this local port mapping if you have set it in your environment file. Start the frontend separately with `npm --prefix frontend run dev`, and check the backend at `http://localhost:8000/api/health`.
+
+The image uses Python 3.11, runs as a non-root user, and excludes local secrets, virtual environments, and generated images. Environment variables are supplied when the container starts. Removing the container removes its generated images; restarting the process clears lobbies.
+
+For a Render Docker web service, set the root directory to `backend` and Dockerfile path to `./Dockerfile`. Use the image's default start command, set the health check to `/api/health`, and supply the backend environment variables listed below. The container listens on Render's `PORT`. The frontend stays on Vercel.
+
 ## Tests
 
 From the repository root, with the backend virtual environment active:
