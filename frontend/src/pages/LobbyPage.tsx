@@ -35,7 +35,7 @@ function LobbyPage() {
 
   const [copied, setCopied] = useState(false);
   const { lobbyId } = useParams();
-  const inviteLink = `http://localhost:5173/join/${lobbyId}`;
+  const inviteLink = `${window.location.origin}/join/${lobbyId}`;
   const [players, setPlayers] = useState<string[]>([]);
   const [host, setHost] = useState<string>();
   const [phase, setPhase] = useState("LOBBY");

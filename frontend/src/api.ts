@@ -1,4 +1,4 @@
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api").replace(/\/+$/, "");
 
 export async function api<T = unknown>(path: string, method = "GET", data?: unknown): Promise<T> {
   const response = await fetch(API_URL + path, {

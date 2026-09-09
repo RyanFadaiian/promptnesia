@@ -1,5 +1,6 @@
 import base64
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import uuid4
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 from openai import OpenAI, BadRequestError
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+backend_url = os.getenv("BACKEND_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
 client = OpenAI(timeout=180, max_retries=0)
 image_queue = ThreadPoolExecutor(max_workers=3)
 
@@ -45,7 +47,7 @@ def generate_image(player):
         image_base64 = result.data[0].b64_json
         image_bytes = base64.b64decode(image_base64, validate=True)
         image_path.write_bytes(image_bytes)
-        player["image_url"] = f"http://127.0.0.1:8000/generated/{filename}"
+        player["image_url"] = f"{backend_url}/generated/{filename}"
     except Exception as error:
         logging.warning("Image generation failed (%s); using placeholder", type(error).__name__)
     finally:
