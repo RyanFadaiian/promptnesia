@@ -2,7 +2,7 @@
 
 A multiplayer browser game where friends write prompts, guess what inspired an AI-generated image, and pick their favorite answers.
 
-**[Play the game](https://promptnesia-brown.vercel.app)** — bring at least one friend.
+**[Play the game](https://promptnesia-brown.vercel.app)** — (Minimum is 2 players to start a game. If you'd like to test it yourself you can run 2 instances).
 
 ## How to play
 
