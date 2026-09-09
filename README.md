@@ -1,0 +1,98 @@
+# Promptnesia
+
+A multiplayer browser game where friends write prompts, guess what inspired an AI-generated image, and pick their favorite answers.
+
+**[Play the game](https://promptnesia-brown.vercel.app)** — bring at least one friend.
+
+## How to play
+
+1. Create a lobby and share the invite link. The host chooses 1–3 rounds.
+2. Everyone has 40 seconds to write an image prompt. Drafts save as you type, so the latest saved text is used if time runs out before you submit. Empty prompts get a random suggestion.
+3. Images appear one at a time. Everyone except the prompt author guesses the original prompt.
+4. Once everyone has guessed, the prompt is revealed. Its author picks their favorite guess, earning that player one point.
+5. After all rounds, compare scores and return to the lobby for another game.
+
+## Built with
+
+- **Frontend:** React, TypeScript, Vite, and React Router
+- **Backend:** Python, FastAPI, and OpenAI image generation
+- **Hosting:** Vercel for the frontend and Render for the backend
+- **Testing:** Vitest, React Testing Library, and Python unittest
+
+The backend manages the game phases, deadlines, and scores. Clients poll for updates every second, while image generation runs in a background thread pool. Ready images can enter the guessing phase while others are still generating.
+
+Draft saving came from playtesting with friends: players would finish writing but forget to press Submit before the timer expired. Draft revisions prevent an older request from overwriting newer text.
+
+## Run locally
+
+You'll need Node.js with npm, Python with pip, and an OpenAI API key with access to the models used in `backend/app/images.py`. Playing locally makes paid API requests; the tests mock them.
+
+From the repository root, set up the backend:
+
+```sh
+cd backend
+python -m venv .venv
+```
+
+Activate the environment:
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
+
+```sh
+# macOS / Linux
+source .venv/bin/activate
+```
+
+Copy `backend/.env.example` to `backend/.env` and replace the placeholder `OPENAI_API_KEY` with your key. Keep the other values for local development. Then, from `backend/`:
+
+```sh
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
+In a second terminal, from the repository root:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173`. The frontend defaults to the local backend at `http://127.0.0.1:8000`. To use a different backend, copy `frontend/.env.example` to `frontend/.env` and change `VITE_API_URL`.
+
+## Tests
+
+From the repository root, with the backend virtual environment active:
+
+```sh
+npm --prefix frontend test
+python -m unittest discover -s backend/tests -t backend
+npm --prefix frontend run build
+npm --prefix frontend run lint
+```
+
+Tests cover game progression, scoring, image generation, draft timeouts, and frontend interactions. See [TESTING.md](TESTING.md) for more details.
+
+## Deployment notes
+
+Set Vercel's root directory to `frontend`, with `npm run build` as the build command and `dist` as the output directory. The included `vercel.json` handles direct invite links.
+
+Run the backend from `backend/` with one worker:
+
+```sh
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
+
+| Variable | Where | Value |
+| --- | --- | --- |
+| `VITE_API_URL` | Vercel | Backend HTTPS URL ending in `/api` |
+| `OPENAI_API_KEY` | Render | Your private API key |
+| `BACKEND_PUBLIC_URL` | Render | Backend HTTPS origin, without `/api` |
+| `FRONTEND_ORIGINS` | Render | Comma-separated allowed frontend origins |
+
+Lobbies are currently stored in memory and generated images on local disk. Run a single backend instance; restarting it clears active games. Shared game storage and persistent image storage would be needed to scale across instances.
+
+Music by Kevin MacLeod.

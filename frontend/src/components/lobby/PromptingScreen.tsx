@@ -18,7 +18,6 @@ export default function PromptingScreen({
       <p className="round-status">
         {secondsLeft}s remaining · {submittedPlayers.length} / {players.length} submitted
       </p>
-      <p>Your prompt is saved as you type and submitted when time runs out.</p>
       {draftError && <p role="alert">{draftError}</p>}
 
       <form
